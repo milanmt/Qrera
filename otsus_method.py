@@ -9,6 +9,18 @@ from sklearn.mixture import GaussianMixture
 from scipy.cluster.vq import kmeans2, ClusterError
 
 
+def var_round(number):
+	number = float(number)
+	
+	if number/10 <= 10:
+		return number
+	elif number/10 <= 100:
+		return round(number, -1)
+	else:
+		return round(number, -2)
+
+
+
 if __name__ == '__main__':
 	
 	company_path = '/media/milan/DATA/Qrera/trials/Paragon'
@@ -42,7 +54,7 @@ if __name__ == '__main__':
 			# filtered_power = sp.lfilter(b,a, power_sig)   ##### PUTTING IN FILTERED SIGNAL INSTEAD OF ORIG
 			for i in range(len(power_sig)-299):
 				if i%300 == 0:
-					power_day.append(round(np.mean(power_sig[i:i+300]), -2))
+					power_day.append(var_round(np.mean(power_sig[i:i+300])))
 
 
 			# zero_padding = (86400-len(power_day))*[0]
