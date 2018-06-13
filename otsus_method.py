@@ -5,8 +5,11 @@ import time
 import pandas 
 import numpy as np
 import scipy.signal as sp
+from scipy.spatial.distance import pdist
 from sklearn.mixture import GaussianMixture
 from scipy.cluster.vq import kmeans2, ClusterError
+from scipy.cluster.hierarchy import fcluster, linkage
+
 
 
 def var_round(number):
@@ -28,6 +31,8 @@ if __name__ == '__main__':
 	MAX = 0
 	MIN = np.inf
 	removed_files = []
+	m_c = 0
+	z_c = 0
 
 	for root, dirs, fs in os.walk(company_path):
 		if fs:
@@ -43,28 +48,57 @@ if __name__ == '__main__':
 		t0 = time.clock()
 		power_day = []
 		if file.endswith('.csv.gz'):
-			print file
 			pd_entries = pandas.read_csv(file, engine="python")
 			try:
 				power_sig = pd_entries['POWER']
 			except KeyError:
 				power_sig = pd_entries['VALUE']
 
-			# b,a = sp.butter(2, 0.0167)
-			# filtered_power = sp.lfilter(b,a, power_sig)   ##### PUTTING IN FILTERED SIGNAL INSTEAD OF ORIG
-			for i in range(len(power_sig)-299):
+
+
+			##### PUTTING IN FILTERED SIGNAL INSTEAD OF ORIG
+
+			## Zero Filter
+			power_sig_nz = [] 
+			for p in power_sig:
+				if p > 0:
+					power_sig_nz.append(p)
+
+			## Smoothing Filter
+			for i in range(len(power_sig_nz)-299):
 				if i%300 == 0:
-					power_day.append(var_round(np.mean(power_sig[i:i+300])))
-
-
-			# zero_padding = (86400-len(power_day))*[0]
-			# power_day.extend(zero_padding)
+					power_day.append(var_round(np.mean(power_sig_nz[i:i+300])))
 
 			power.extend(power_day)
 			power_day = np.array(power_day)
 			power_val, power_count = np.unique(power_day, return_counts=True)
 			prob = power_count/float(np.sum(power_count))
 			data_validity = True
+
+
+
+			#### CHECKING VALIDITY OF DATA
+
+			mean = np.mean(power_day)
+			std = np.std(power_day)
+	
+			extrema = list(sp.argrelextrema(power_count, np.greater, order=5))
+			peaks =  power_val[extrema[0]]
+			# print peaks 
+			
+			if len(peaks) < 1:
+				z_c = z_c + 1
+				print  'zero peak', file
+
+			elif all(x >= (mean-std) and x<= (mean+std) for x in peaks):
+				m_c = m_c + 1
+				print file
+
+
+	print m_c, 'No.of files with single peaks'
+	print z_c, 'No.of files with zero peaks'
+
+			## Gaussian Mixture
 
 			# sig_in = np.array(map((lambda x : [x]), power_day))
 			
@@ -77,30 +111,32 @@ if __name__ == '__main__':
 			# 	print file[-17:-7]
 			# else:
 			# 	data_validity = True
+
+
+			### KMeans Clustering
 			
-			# new_max = max(power_val)
-			# if new_max >= MAX:
-			# 	MAX = new_max
+	# 		new_max = max(power_sig_nz)
+	# 		if new_max >= MAX:
+	# 			MAX = new_max
+	# 		print 'MAX', MAX
 
-			# new_min = min(power_val)
-			# if new_min <= MIN:
-			# 	MIN = new_min
+	# 		new_min = min(power_sig_nz)
+	# 		if new_min <= MIN:
+	# 			MIN = new_min
+	# 		print 'MIN', MIN
 		
-			# k_in = np.array(map((lambda x : [x]), power_day))
-			# try:
-			# 	clusters, labels = kmeans2(k_in, k=np.array([[MAX], [MIN]]), minit='matrix', missing='raise')
-			# 	data_validity = True
+	# 		k_in = np.array(map((lambda x : [x]), power_sig_nz))
+	# 		try:
+	# 			clusters, labels = kmeans2(k_in, k=np.array([[MAX], [MIN]]), minit='matrix', missing='raise')
+	# 			data_validity = True
 
-			# except ClusterError:
-			# 	data_validity = False
-			# 	print 'FILE BEING IGNORED'
-			# 	print file[-17:-7]
-			# 	ig_count = ig_count+1
+	# 		except ClusterError:
+	# 			data_validity = False
+	# 			print 'FILE BEING IGNORED'
+	# 			print file[-17:-7]
+	# 			ig_count = ig_count+1
 
-			# 	removed_files.append(file)
-
-
-
+	# 			removed_files.append(file)
 
 
 	# df = pandas.DataFrame(removed_files, columns=['f_path'])
@@ -108,86 +144,69 @@ if __name__ == '__main__':
 
 	# print ig_count, 'Files ignored'	
 	# print 'Total: ' , len(files)
-			if data_validity == True:
-				print 'Calculating threshold for day...'
-				max_sigma = 0
-				sigma_vals = []
-				ind = []
 
-				for i in range(len(power_val)):
-					w0 = np.sum(prob[:i+1])
-					w1 = np.sum(prob[i+1:])
+    ###### OTSUS THRESHOLD CALCULATION
 
-					u0t = 0
-					for j in range(i+1):
-						u0t = u0t + power_val[j]*prob[j]/w0
+			# if data_validity == True:
+			# 	print 'Calculating threshold for day...'
+	# 			max_sigma = 0
+	# 			sigma_vals = []
+	# 			ind = []
 
-					u1t = 0
-					for j in range(i+1,len(power_val)):
-						u1t  = u1t + power_val[j]*prob[j]/w1
+	# 			for i in range(len(power_val)):
+	# 				w0 = np.sum(prob[:i+1])
+	# 				w1 = np.sum(prob[i+1:])
 
-					sigma = 1*(w0*w1*(u0t-u1t)*(u0t-u1t))
+	# 				u0t = 0
+	# 				for j in range(i+1):
+	# 					u0t = u0t + power_val[j]*prob[j]/w0
 
-					if sigma >= max_sigma:
-						max_sigma = sigma
-						threshold = power_val[i]
-				# 	sigma_vals.append(sigma)
+	# 				u1t = 0
+	# 				for j in range(i+1,len(power_val)):
+	# 					u1t  = u1t + power_val[j]*prob[j]/w1
 
-				
-				
-				# sigma_ind = zip(sigma_vals,range(len(sigma_vals)))
-				# # print sigma_ind
-				# sigma_ind.sort(key= lambda x: x[0], reverse=True)
-				# # print sigma_ind
-				# max_sigma = sigma_ind[0][0]
-				# for i in range(len(sigma_ind)):
-				# 	c_sigma = sigma_ind[i][0]
-				# 	if i !=0 :
-				# 		change =  (max_sigma - c_sigma)/max_sigma
-				# 		if change > 0.5:
-				# 			break
-				# 		else:
-				# 			last_ind = i
+	# 				sigma = 1*(w0*w1*(u0t-u1t)*(u0t-u1t))
 
-				# sigma_ind[:i+1].sort(key= lambda x: prob[x[1]], reverse=True)
-				# threshold = power_val[sigma_ind[0][1]]
+	# 				if sigma >= max_sigma:
+	# 					max_sigma = sigma
+	# 					threshold = power_val[i]
 
-				threshold_days.append(threshold)
-				days.append(file[:-7])
-				print file[-17:-7]
-				print threshold
-				print 'Time: ', (time.clock()- t0)/60
+	# 			threshold_days.append(threshold)
+	# 			days.append(file[:-7])
+	# 			print file[-17:-7]
+	# 			print threshold
+	# 			print 'Time: ', (time.clock()- t0)/60
 
 	
 
-	df = pandas.DataFrame( data = list(zip(threshold_days, days)), columns = ['Threshold', 'Day'])
-	df.to_csv('paragon_filtered_otsus.csv', index= True, header=True)
+	# df = pandas.DataFrame( data = list(zip(threshold_days, days)), columns = ['Threshold', 'Day'])
+	# df.to_csv('paragon_filtered_otsus.csv', index= True, header=True)
 
-	t0 = time.clock()
-	power = np.array(power)
-	power_val, power_count = np.unique(power, return_counts=True)
-	prob = power_count/float(np.sum(power_count))
+	# t0 = time.clock()
+	# power = np.array(power)
+	# power_val, power_count = np.unique(power, return_counts=True)
+	# prob = power_count/float(np.sum(power_count))
 	
-	print 'Calculating overall threshold...'
-	max_sigma = 0
-	for i in range(len(power_val)):
-		w0 = np.sum(prob[:i+1])
-		w1 = np.sum(prob[i+1:])
+	# print 'Calculating overall threshold...'
+	# max_sigma = 0
+	# for i in range(len(power_val)):
+	# 	w0 = np.sum(prob[:i+1])
+	# 	w1 = np.sum(prob[i+1:])
 
-		u0t = 0
-		for j in range(i+1):
-			u0t = u0t + power_val[j]*prob[j]/w0
+	# 	u0t = 0
+	# 	for j in range(i+1):
+	# 		u0t = u0t + power_val[j]*prob[j]/w0
 
-		u1t = 0
-		for j in range(i+1,len(power_val)):
-			u1t  = u1t + power_val[j]*prob[j]/w1
+	# 	u1t = 0
+	# 	for j in range(i+1,len(power_val)):
+	# 		u1t  = u1t + power_val[j]*prob[j]/w1
 
-		sigma = 1*(w0*w1*(u0t-u1t)*(u0t-u1t))
+	# 	sigma = 1*(w0*w1*(u0t-u1t)*(u0t-u1t))
 
-		if sigma >= max_sigma:
-			max_sigma = sigma
-			threshold = power_val[i]
+	# 	if sigma >= max_sigma:
+	# 		max_sigma = sigma
+	# 		threshold = power_val[i]
 
 
-	print threshold
-	print 'Time: ', (time.clock()- t0)/60 
+	# print threshold
+	# print 'Time: ', (time.clock()- t0)/60 
