@@ -66,21 +66,20 @@ if __name__ == '__main__':
 				error_count.append(1)
 				if ht_out == 0 and mot_out == 1:
 					fp = fp +1
-					fp_l.append(fp)
 				elif ht_out == 1 and mot_out == 0:
 					fn = fn+1
-					fn_l.append(fn)
 
 			else:
 				error_count.append(0)
 				if ht_out == 0 and mot_out ==0:
 					tn = tn+1
-					tn_l.append(tn)
 				elif ht_out == 1 and mot_out == 1:
 					tp = tp+1 
-					tp_l.append(tp)
 
-
+		fn_l.append(fn)
+		fp_l.append(fp)
+		tn_l.append(tn)
+		tp_l.append(tp)
 
 		print days[i]
 		percent = float(np.sum(error_count))/len(error_count)
