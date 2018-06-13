@@ -10,6 +10,32 @@ from sklearn.mixture import GaussianMixture
 from scipy.cluster.vq import kmeans2, ClusterError
 from scipy.cluster.hierarchy import fcluster, linkage
 
+def get_otsus_threshold(power):
+	print 'Calculating threshold...'
+	power_val, power_count = np.unique(power, return_counts=True)
+	prob = power_count/float(np.sum(power_count))
+
+	max_sigma = 0
+		
+	for i in range(len(power_val)):
+		w0 = np.sum(prob[:i+1])
+		w1 = np.sum(prob[i+1:])
+
+		u0t = 0
+		for j in range(i+1):
+			u0t = u0t + power_val[j]*prob[j]/w0
+
+ 		u1t = 0
+		for j in range(i+1,len(power_val)):
+			u1t  = u1t + power_val[j]*prob[j]/w1
+	
+		sigma = 1*(w0*w1*(u0t-u1t)*(u0t-u1t))
+
+		if sigma >= max_sigma:
+			max_sigma = sigma
+			threshold = power_val[i]
+
+	return threshold
 
 
 def var_round(number):
@@ -70,33 +96,30 @@ if __name__ == '__main__':
 					power_day.append(var_round(np.mean(power_sig_nz[i:i+300])))
 
 			power.extend(power_day)
-			power_day = np.array(power_day)
-			power_val, power_count = np.unique(power_day, return_counts=True)
-			prob = power_count/float(np.sum(power_count))
 			data_validity = True
-
-
 
 			#### CHECKING VALIDITY OF DATA
 
-			mean = np.mean(power_day)
-			std = np.std(power_day)
+			## std way 
+
+	# 		mean = np.mean(power_day)
+	# 		std = np.std(power_day)
 	
-			extrema = list(sp.argrelextrema(power_count, np.greater, order=5))
-			peaks =  power_val[extrema[0]]
-			# print peaks 
+	# 		extrema = list(sp.argrelextrema(power_count, np.greater, order=3))
+	# 		peaks =  power_val[extrema[0]]
+	# 		# print peaks 
 			
-			if len(peaks) < 1:
-				z_c = z_c + 1
-				print  'zero peak', file
+	# 		if len(peaks) < 1:
+	# 			z_c = z_c + 1
+	# 			print  'zero peak', file
 
-			elif all(x >= (mean-std) and x<= (mean+std) for x in peaks):
-				m_c = m_c + 1
-				print file
+	# 		elif all(x >= (mean-std) and x<= (mean+std) for x in peaks):
+	# 			m_c = m_c + 1
+	# 			print file
 
 
-	print m_c, 'No.of files with single peaks'
-	print z_c, 'No.of files with zero peaks'
+	# print m_c, 'No.of files with single peaks'
+	# print z_c, 'No.of files with zero peaks'
 
 			## Gaussian Mixture
 
@@ -147,66 +170,30 @@ if __name__ == '__main__':
 
     ###### OTSUS THRESHOLD CALCULATION
 
-			# if data_validity == True:
-			# 	print 'Calculating threshold for day...'
-	# 			max_sigma = 0
-	# 			sigma_vals = []
-	# 			ind = []
+			if data_validity == True:
+				threshold = get_otsus_threshold(power)
 
-	# 			for i in range(len(power_val)):
-	# 				w0 = np.sum(prob[:i+1])
-	# 				w1 = np.sum(prob[i+1:])
+				print file[-17:-7]
+				print threshold
+				print 'Time: ', (time.clock()- t0)/60
+				threshold_days.append(threshold)
+				days.append(file[:-7])
 
-	# 				u0t = 0
-	# 				for j in range(i+1):
-	# 					u0t = u0t + power_val[j]*prob[j]/w0
+				#### checking extrema on either side of threshold
+				# extrema = list(sp.argrelextrema(power_count, np.greater, order=3))
+				# peaks =  power_val[extrema[0]]
 
-	# 				u1t = 0
-	# 				for j in range(i+1,len(power_val)):
-	# 					u1t  = u1t + power_val[j]*prob[j]/w1
+				# if len(peaks) < 1:
+				# 	print file 
 
-	# 				sigma = 1*(w0*w1*(u0t-u1t)*(u0t-u1t))
+				# elif all(p )
 
-	# 				if sigma >= max_sigma:
-	# 					max_sigma = sigma
-	# 					threshold = power_val[i]
-
-	# 			threshold_days.append(threshold)
-	# 			days.append(file[:-7])
-	# 			print file[-17:-7]
-	# 			print threshold
-	# 			print 'Time: ', (time.clock()- t0)/60
 
 	
 
-	# df = pandas.DataFrame( data = list(zip(threshold_days, days)), columns = ['Threshold', 'Day'])
-	# df.to_csv('paragon_filtered_otsus.csv', index= True, header=True)
-
-	# t0 = time.clock()
-	# power = np.array(power)
-	# power_val, power_count = np.unique(power, return_counts=True)
-	# prob = power_count/float(np.sum(power_count))
-	
-	# print 'Calculating overall threshold...'
-	# max_sigma = 0
-	# for i in range(len(power_val)):
-	# 	w0 = np.sum(prob[:i+1])
-	# 	w1 = np.sum(prob[i+1:])
-
-	# 	u0t = 0
-	# 	for j in range(i+1):
-	# 		u0t = u0t + power_val[j]*prob[j]/w0
-
-	# 	u1t = 0
-	# 	for j in range(i+1,len(power_val)):
-	# 		u1t  = u1t + power_val[j]*prob[j]/w1
-
-	# 	sigma = 1*(w0*w1*(u0t-u1t)*(u0t-u1t))
-
-	# 	if sigma >= max_sigma:
-	# 		max_sigma = sigma
-	# 		threshold = power_val[i]
+	df = pandas.DataFrame( data = list(zip(threshold_days, days)), columns = ['Threshold', 'Day'])
+	df.to_csv('paragon_filtered_otsus.csv', index= True, header=True)
 
 
-	# print threshold
-	# print 'Time: ', (time.clock()- t0)/60 
+
+
