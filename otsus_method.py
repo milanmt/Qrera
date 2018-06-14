@@ -2,7 +2,8 @@
 
 import os
 import time
-import pandas 
+import pandas
+import jenkspy 
 import numpy as np
 import scipy.signal as sp
 from scipy.spatial.distance import pdist
@@ -43,7 +44,7 @@ def var_round(number):
 	
 	if number/10 <= 10:
 		return number
-	elif number/10 <= 100:
+	elif number/10 <= 1000:
 		return round(number, -1)
 	else:
 		return round(number, -2)
@@ -52,7 +53,7 @@ def var_round(number):
 
 if __name__ == '__main__':
 	
-	company_path = '/media/milan/DATA/Qrera/trials/Paragon'
+	company_path = '/media/milan/DATA/Qrera/trials/AutoAcc'
 	files = []
 	MAX = 0
 	MIN = np.inf
@@ -171,13 +172,36 @@ if __name__ == '__main__':
     ###### OTSUS THRESHOLD CALCULATION
 
 			if data_validity == True:
+				#### OTSUS
 				threshold = get_otsus_threshold(power)
-
-				print file[-17:-7]
 				print threshold
-				print 'Time: ', (time.clock()- t0)/60
+
 				threshold_days.append(threshold)
 				days.append(file[:-7])
+
+				print file[-17:-7]
+				print 'Time: ', (time.clock()- t0)/60
+
+
+				### JENKS
+				# threshold = jenkspy.jenks_breaks(power, nb_class=3)
+				# print threshold
+
+
+				# th = 0
+				# tc = 0
+				# power_val, power_count = np.unique(power, return_counts=True)
+				# for i in range(len(power_val)):
+				# 	if power_val[i] >= threshold[1] and power_val[i] <= threshold[2]:
+				# 		th = th + power_val[i]*power_count[i]
+				# 		tc = tc + power_count[i]
+
+				# threshold_days.append(var_round(th/tc))
+				# days.append(file[:-7])
+
+				# print file[-17:-7]
+				# print var_round(th/tc)
+				# print 'Time: ', (time.clock()- t0)/60
 
 				#### checking extrema on either side of threshold
 				# extrema = list(sp.argrelextrema(power_count, np.greater, order=3))
@@ -192,7 +216,7 @@ if __name__ == '__main__':
 	
 
 	df = pandas.DataFrame( data = list(zip(threshold_days, days)), columns = ['Threshold', 'Day'])
-	df.to_csv('paragon_filtered_otsus.csv', index= True, header=True)
+	df.to_csv('autoacc_filtered_otsus.csv', index= True, header=True)
 
 
 
