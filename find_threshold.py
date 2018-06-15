@@ -8,6 +8,7 @@ import numpy as np
 
 
 def get_otsus_threshold(power):
+	print 'Calculating threshold...'
 	power_val, power_count = np.unique(power, return_counts=True)
 	prob = power_count/float(np.sum(power_count))
 
@@ -34,6 +35,7 @@ def get_otsus_threshold(power):
 	return threshold
 
 def get_jenks_threshold(power, no_thresholds_required):
+	print 'Calculating threshold...'
 	return jenkspy.jenks_breaks(power, nb_class=int(no_thresholds_required)+1)[1:-1]
 
 
@@ -50,17 +52,12 @@ def var_round(number):
 
 def filter_data(power_sig):
 	print 'Filtering Data...'
-	## Zero Filter
-	power_sig_nz = [] 
-	for p in power_sig:
-		if p > 0:
-			power_sig_nz.append(p)
-
+	
 	## Smoothing Filter
 	power_smoothed = []
-	for i in range(len(power_sig_nz)-299):
+	for i in range(len(power_sig)-299):
 		if i%300 == 0:
-			power_smoothed.append(var_round(np.mean(power_sig_nz[i:i+300])))
+			power_smoothed.append(var_round(np.mean(power_sig[i:i+300])))
 
 	return power_smoothed
 
@@ -95,7 +92,6 @@ def threshold_of_device(path_to_device, no_thresholds_required):
 	power_raw = access_data(path_to_device)
 	power = filter_data(power_raw)
 
-	print 'Calculating threshold...'
 	if no_thresholds_required == 1:
 		threshold = get_otsus_threshold(power)
 	else:
