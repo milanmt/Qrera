@@ -28,6 +28,7 @@ def var_round(number):
 		return round(number, -2)
 
 def preprocess_power(power_df, time_df):
+	print ('preprocess_power')
 	
 	pt = list(zip(power_df, time_df))
 	pt.sort(key=lambda x: x[1])
@@ -53,24 +54,38 @@ def preprocess_power(power_df, time_df):
 					power.append(pt[i-1][0])
 
 	## Splitting signal into working regions 
+	# working = []
+	# last_index = -1
+	# first_index = -1
+	# for j in range(len(power)):
+	# 	if power[j] > THRESHOLD: 
+	# 		if first_index == -1 :
+	# 			first_index = j
+	# 		last_index = j 
+	# 	else:
+	# 		if j-last_index > MIN_IDLE_TIME and last_index != -1 and first_index != -1:
+	# 			if len(power[first_index:last_index+1]) >= MIN_WORK_TIME:
+	# 				working.append(power[first_index:last_index+1])
+	# 			first_index = -1
+	# 	if j == len(power)-1 and j - last_index < MIN_IDLE_TIME:
+	# 		working.append(power[first_index:])
+
+	print ('work_filter')		
+
+	## Without splitting 
 	working = []
 	last_index = -1
 	first_index = -1
+	work_filter = []
 	for j in range(len(power)):
 		if power[j] > THRESHOLD: 
-			if first_index == -1 :
-				first_index = j
-			last_index = j 
+			work_filter.append(power[j])
 		else:
-			if j-last_index > MIN_IDLE_TIME and last_index != -1 and first_index != -1:
-				if len(power[first_index:last_index+1]) >= MIN_WORK_TIME:
-					working.append(power[first_index:last_index+1])
-				first_index = -1
-		if j == len(power)-1 and j - last_index < MIN_IDLE_TIME:
-			working.append(power[first_index:])
-
+			work_filter.append(0)
+	working.append(work_filter)
 			
 	
+	print ('Smoothing Filter')
 	### Smoothing Filter 
 	power_f_set = []
 	for p_wrk in working:
@@ -83,13 +98,13 @@ def preprocess_power(power_df, time_df):
 		power_f_set.append(power_f)
 	
 
-	
+	print ('Mean removing')
 	## Removing the mean of the signal
 	power_dmf_set = []
 	for power_f in power_f_set:
-		power_f_mean = np.mean(power_f)
-		power_dmf = [s - np.mean(power_f) for s in power_f]
-		power_dmf_set.append(power_dmf)
+		power_dmf = map(lambda x: x-np.mean(power_f), power_f)
+		print ('list conversion')
+		power_dmf_set.append(list(power_dmf))
 
 	return power_dmf_set
 
@@ -124,6 +139,8 @@ if __name__ == '__main__':
 	
 	
 	fund_freqs = dict()
+
+	print ('FFt')
 
 	for p in power_f:
 		# plt.plot(np.arange(0,len(p)), p)
