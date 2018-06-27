@@ -1,8 +1,9 @@
 #! /usr/bin/env python3
 
-from scipy.cluster.hierarchy import fcluster, linkage
-from scipy.spatial.distance import pdist
-from scipy.fftpack import fft, ifft
+# from scipy.cluster.hierarchy import fcluster, linkage
+# from scipy.spatial.distance import pdist
+from scipy.signal import periodogram
+from scipy.fftpack import fft 
 import matplotlib.pyplot as plt
 import pandas as pd 
 import numpy as np 
@@ -10,11 +11,12 @@ import jenkspy
 import time
 import math
 
+SMOOTHING_FILTER_WINDOW = 10
 THRESHOLD = 2000
 MIN_IDLE_TIME = 74  # seconds
 MIN_WORK_TIME = 74  # seconds 
 Fs = 1 				# Sampling Frequency
-min_zeros = 5       # FT grouping 
+min_zeros = 2       # FT grouping 
 
 
 def var_round(number):
@@ -27,31 +29,26 @@ def var_round(number):
 	else:
 		return round(number, -2)
 
-def preprocess_power(power_df, time_df):
-	print ('preprocess_power')
-	
-	pt = list(zip(power_df, time_df))
-	pt.sort(key=lambda x: x[1])
+def preprocess_power(df):
+	print ('Preprocessing...')
+	df.sort_values(by='TS')	
+	df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
 
-	## Sorting and removing time anomalies
-	time_raw = []
 	power = []
-	for i in range(len(pt)):
-		if not time_raw and not power:
-			time_raw.append(pt[i][1])
-			power.append(pt[i][0])
+	for i in range(df.shape[0]):
+		if not power:
+			power.append(df.iloc[i,0])
 		else:
-			if pt[i][1]-pt[i-1][1] == 1.0:
-				time_raw.append(pt[i][1])
-				power.append(pt[i][0])
+			if df.iloc[i,1]-df.iloc[i-1,1] == 1.0:
+				power.append(df.iloc[i,0])
 		
-			elif pt[i][1] == pt[i-1][1]:
-				power[i-1] = (pt[i-1][0]+pt[i][0])/2
+			elif df.iloc[i,1] == df.iloc[i-1,1]:
+				power[i-1] = (df.iloc[i-1,0]+df.iloc[i,0])/2
 
-			elif pt[i][1]-pt[i-1][1] > 1.0:
-				for j in range(int(pt[i][1]-pt[i-1][1])):
-					time_raw.append(pt[i-1][1]+j+1)
-					power.append(pt[i-1][0])
+			elif df.iloc[i,1]-df.iloc[i-1,1] > 1.0:
+				for j in range(int(df.iloc[i,1]-df.iloc[i-1,1])):
+					power.append(df.iloc[i-1,0])
+
 
 	## Splitting signal into working regions 
 	# working = []
@@ -70,47 +67,33 @@ def preprocess_power(power_df, time_df):
 	# 	if j == len(power)-1 and j - last_index < MIN_IDLE_TIME:
 	# 		working.append(power[first_index:])
 
-	print ('work_filter')		
 
 	## Without splitting 
-	working = []
-	last_index = -1
-	first_index = -1
-	work_filter = []
-	for j in range(len(power)):
-		if power[j] > THRESHOLD: 
-			work_filter.append(power[j])
-		else:
-			work_filter.append(0)
-	working.append(work_filter)
-			
-	
-	print ('Smoothing Filter')
-	### Smoothing Filter 
-	power_f_set = []
-	for p_wrk in working:
-		power_f = []
-		for i in range(len(p_wrk)):
-			if i >= len(p_wrk) - 9:
-				power_f.append(var_round(np.mean(p_wrk[i:])))
-			else:
-				power_f.append(var_round(np.mean(p_wrk[i:i+10])))
-		power_f_set.append(power_f)
-	
+	working = dict()
+	power = pd.Series(power).apply(lambda x: x if x > THRESHOLD else 0)
+	working.update({0:power})
 
-	print ('Mean removing')
+	
 	## Removing the mean of the signal
-	power_dmf_set = []
-	for power_f in power_f_set:
-		power_dmf = map(lambda x: x-np.mean(power_f), power_f)
-		print ('list conversion')
-		power_dmf_set.append(list(power_dmf))
+	for ind in working.keys():
+		mean_pdf = np.mean(working[ind])
+		p = working[ind] - mean_pdf
+		working.update({ ind : p})
 
-	return power_dmf_set
+	### Smoothing Filter 
+	for ind in working.keys():
+		p_wrk = working[ind]
+		for x in range(p_wrk.shape[0]):
+			if x < p_wrk.shape[0]-SMOOTHING_FILTER_WINDOW-1 :
+				p_wrk[x] = var_round(np.mean(p_wrk[x:x+SMOOTHING_FILTER_WINDOW])) 
+			else:
+				var_round(np.mean(p_wrk[x:]))
+		working.update({ ind : p})
+
+	return working
 
 
 def LCM(numbers):
-	print ('finding lcm')
 	if isinstance(numbers[0], tuple):
 		common_den = LCM([n[1] for n in numbers])
 		mod_numbers = [(n[0]*(common_den/n[1]), common_den) for n in numbers]
@@ -122,7 +105,6 @@ def LCM(numbers):
 			lcm = i*lcm/math.gcd(int(lcm),int(i))
 	return round(lcm)
 
-# def HCF(numbers):
 
 
 
@@ -132,47 +114,32 @@ if __name__ == '__main__':
 	file = '/media/milan/DATA/Qrera/AutoAcc/39FFBE/2017/12/2017_12_10.csv.gz'
 
 	df = pd.read_csv(file)
-	power_df = np.array(df['POWER'])
-	time_df = map(lambda x: time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S')), df['TS'])	
-	
-	power_f = preprocess_power(power_df, time_df)
-	
-	
+	power_f = preprocess_power(df)
+
 	fund_freqs = dict()
 
-	print ('FFt')
-
-	for p in power_f:
+	for p in power_f.values():
 		# plt.plot(np.arange(0,len(p)), p)
 		# plt.show()
 
 		# autocorr = np.correlate(p, p, mode='full')
 		# plt.plot(np.arange(0,len(autocorr)), autocorr)
 		# plt.show()
-
+		print ('FFT')
 		N = len(p)   ## No.of samples 
 		nyquist = int(N//2)
 
-		ft = np.absolute(np.fft.fft(p)[0:nyquist])
-		# plt.stem(range(len(ft)), ft)
-		# plt.show()
-		
+		## Fourier Transform
+		ft = pd.Series(np.absolute(np.fft.fft(p)[0:nyquist])) 
+
+		## Filtering FT - 1	
+		print ('FFT thresholding')
 		th = jenkspy.jenks_breaks(ft, nb_class=2)[1]
+		ft_f = ft.apply(lambda x: x if x > th else 0)
 
-		ft_f = []
-		for val in ft:
-			if val > th:
-				ft_f.append(val)
-			else:
-				ft_f.append(0)
-
-		# plt.stem(range(len(ft_f)), ft_f)
-		# plt.show()
-
-
-		##### crude grouping 
-
-
+		## Filtering FT - 2
+		print ('FFT grouping')
+		ft_f = list(ft_f)
 		final_ft = np.zeros((len(ft_f)))
 		end_ind = 0
 		for i in range(len(ft_f)):
@@ -203,19 +170,22 @@ if __name__ == '__main__':
 					
 					final_ft[f] = ft_f[f]
 							
-		comp_periods = [(N,list(final_ft).index(x)) for x in final_ft if x != 0]
-		print (comp_periods)
-		fundamental_period = Fs*LCM(comp_periods)
+		# comp_periods = [(N,list(final_ft).index(x)) for x in final_ft if x != 0]
+		# print (comp_periods)
+		# fundamental_period = Fs*LCM(comp_periods)
 
-		print ('Time Period: ', fundamental_period)
+		# print ('Time Period: ', fundamental_period)
 
-		# plt.stem(range(len(ft_f)), final_ft)
-		# plt.show()
+		
+		freqs = np.linspace(0, float(Fs)/2, N/2)
+		freq_ind = [list(final_ft).index(x) for x in final_ft if x != 0]
+		comp_freqs = [round(freqs[y],4) for y in freq_ind]
+		print (comp_freqs)
 
-	# 	freqs = np.linspace(0, float(Fs)/2, N/2)
-	# 	freq_ind = [list(final_ft).index(x) for x in final_ft if x != 0]
-	# 	comp_freqs = [round(freqs[y],3) for y in freq_ind]
-	# 	print (comp_freqs)
+		plt.figure(4)
+		plt.stem(freqs, final_ft)
+		plt.show()
+
 
 	# 	for c_f in comp_freqs:
 	# 		if c_f not in fund_freqs:
@@ -226,12 +196,5 @@ if __name__ == '__main__':
 	# 		fund_freqs.update({ c_f : count})
 
 	# print (fund_freqs)
-
-
-
-
-		
-
-
 
 	
