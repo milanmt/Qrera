@@ -1,14 +1,17 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 import os
 import time
 import pandas
 import jenkspy 
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn import linear_model
 
+FILTER_WINDOW = 300 
 
 def get_otsus_threshold(power):
-	print 'Calculating threshold...'
+	print ('Calculating threshold...')
 	power_val, power_count = np.unique(power, return_counts=True)
 	prob = power_count/float(np.sum(power_count))
 
@@ -22,7 +25,7 @@ def get_otsus_threshold(power):
 		for j in range(i+1):
 			u0t = u0t + power_val[j]*prob[j]/w0
 
- 		u1t = 0
+		u1t = 0
 		for j in range(i+1,len(power_val)):
 			u1t  = u1t + power_val[j]*prob[j]/w1
 	
@@ -35,7 +38,7 @@ def get_otsus_threshold(power):
 	return threshold
 
 def get_jenks_threshold(power, no_thresholds_required):
-	print 'Calculating threshold...'
+	print ('Calculating threshold...')
 	return jenkspy.jenks_breaks(power, nb_class=int(no_thresholds_required)+1)[1:-1]
 
 
@@ -51,18 +54,16 @@ def var_round(number):
 
 
 def filter_data(power_sig):
-	print 'Filtering Data...'
+	print ('Filtering Data...')
 	
 	## Smoothing Filter
-	power_smoothed = []
-	for i in range(len(power_sig)-299):
-		if i%300 == 0:
-			power_smoothed.append(var_round(np.mean(power_sig[i:i+300])))
-
+	power_smoothed = [var_round(np.mean(power_sig[i:i+FILTER_WINDOW])) 
+	for i in range(len(power_sig)-FILTER_WINDOW+1) if i%FILTER_WINDOW == 0]
+	
 	return power_smoothed
 
 
-def access_data(path_to_device):
+def access_data(path_to_device, day):
 	#### Change depending on where data is available 
 	#### Accesses complete data available from location provided
 
@@ -71,7 +72,9 @@ def access_data(path_to_device):
 		if fs:
 			files.extend(os.path.join(root,f) for f in fs)
 	
-	print 'Reading files...'
+	print ('Reading files...')
+
+	files.sort()
 
 	power_raw = []
 	for file in files:
@@ -84,26 +87,47 @@ def access_data(path_to_device):
 
 			power_raw.extend(power_sig)
 
+		if day in file:
+			break
+
 	return power_raw
 
-def threshold_of_device(path_to_device, no_thresholds_required):
+def threshold_of_device(path_to_device, no_thresholds_required, day):
 
 	t0 = time.clock()
-	power_raw = access_data(path_to_device)
+	power_raw = access_data(path_to_device, day)
 	power = filter_data(power_raw)
 
 	if no_thresholds_required == 1:
 		threshold = get_otsus_threshold(power)
 	else:
 		threshold = get_jenks_threshold(power, no_thresholds_required)
-				
-	print threshold
-	print 'Took ', time.clock()-t0, 's'
-	return threshold
+
+	if no_thresholds_required == 1:
+		
+		#### ransac
+		power_th = np.array([p for p in power if p <= threshold])
+		x = np.array([[i] for i in range(0,len(power_th))])
+		ransac = linear_model.RANSACRegressor()
+		ransac.fit(x, power_th)
+		new_y = ransac.predict(x)
+
+		#### lse
+		min_lse = np.inf
+		for y in range(int(new_y[0]), int(new_y[1])+1):
+			lse = np.sum((new_y-y)**2)
+			if min_lse > lse:
+				min_lse = lse
+				new_threshold = y
+
+		
+	print (new_threshold)
+	print ('Took ', time.clock()-t0, 's')
+	return new_threshold
 
 
 if __name__ == '__main__':
 
-	th = threshold_of_device('/media/milan/DATA/Qrera/AutoAcc', 1)
+	th = threshold_of_device('/media/milan/DATA/Qrera/Cannula', 1, '2018_05_10')
 	
 	
