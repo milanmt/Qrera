@@ -54,16 +54,15 @@ def var_round(number):
 
 
 def filter_data(power_sig):
-	print ('Filtering Data...')
 	
 	## Smoothing Filter
 	power_smoothed = [var_round(np.mean(power_sig[i:i+FILTER_WINDOW])) 
-	for i in range(len(power_sig)-FILTER_WINDOW+1) if i%FILTER_WINDOW == 0]
+	for i in range(power_sig.shape[0]-FILTER_WINDOW+1) if i%FILTER_WINDOW == 0]
 	
 	return power_smoothed
 
 
-def access_data(path_to_device, day):
+def process_data(path_to_device, day):
 	#### Change depending on where data is available 
 	#### Accesses complete data available from location provided
 
@@ -72,31 +71,30 @@ def access_data(path_to_device, day):
 		if fs:
 			files.extend(os.path.join(root,f) for f in fs)
 	
-	print ('Reading files...')
+	print ('Processing files...')
 
 	files.sort()
 
-	power_raw = []
+	power = []
 	for file in files:
 		if file.endswith('.csv.gz'):
 			pd_entries = pandas.read_csv(file, engine="python")
 			try:
-				power_sig = pd_entries['POWER']
+				power_sig = filter_data(pd_entries['POWER'])
 			except KeyError:
-				power_sig = pd_entries['VALUE']
+				power_sig = filter_data(pd_entries['VALUE'])
 
-			power_raw.extend(power_sig)
+			power.extend(power_sig)
 
-		if day in file:
-			break
+			if day in file:
+				break
 
-	return power_raw
+	return power
 
 def threshold_of_device(path_to_device, no_thresholds_required, day):
 
 	t0 = time.clock()
-	power_raw = access_data(path_to_device, day)
-	power = filter_data(power_raw)
+	power = process_data(path_to_device, day)
 
 	if no_thresholds_required == 1:
 		threshold = get_otsus_threshold(power)
@@ -105,29 +103,34 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 
 	if no_thresholds_required == 1:
 		
-		#### ransac
+	
 		power_th = np.array([p for p in power if p <= threshold])
-		x = np.array([[i] for i in range(0,len(power_th))])
-		ransac = linear_model.RANSACRegressor()
-		ransac.fit(x, power_th)
-		new_y = ransac.predict(x)
 
-		#### lse
-		min_lse = np.inf
-		for y in range(int(new_y[0]), int(new_y[1])+1):
-			lse = np.sum((new_y-y)**2)
-			if min_lse > lse:
-				min_lse = lse
-				new_threshold = y
+		print (len(power_th)/len(power))
+
+		if len(power_th)/len(power) > 0.5:
+			print ('RANSAC')
+			#### ransac
+			x = np.array([[i] for i in range(0,len(power_th))])
+			ransac = linear_model.RANSACRegressor()
+			ransac.fit(x, power_th)
+			new_y = ransac.predict(x)
+
+			#### lse
+			min_lse = np.inf
+			for y in range(int(new_y[0]), int(new_y[1])+1):
+				lse = np.sum((new_y-y)**2)
+				if min_lse > lse:
+					min_lse = lse
+					threshold = y
 
 		
-	print (new_threshold)
+	print (threshold)
 	print ('Took ', time.clock()-t0, 's')
-	return new_threshold
+	return threshold
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 
-	th = threshold_of_device('/media/milan/DATA/Qrera/Cannula', 1, '2018_05_10')
-	
+# 	# th = threshold_of_device('/media/milan/DATA/Qrera/Paragon', 1, '2018_04_05')
 	
