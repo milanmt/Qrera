@@ -46,7 +46,7 @@ def var_round(number):
 	number = float(number)
 	
 	if number/10 <= 10:
-		return number
+		return round(number)
 	elif number/10 <= 1000:
 		return round(number, -1)
 	else:
@@ -70,6 +70,10 @@ def process_data(path_to_device, day):
 	for root, dirs, fs in os.walk(path_to_device):
 		if fs:
 			files.extend(os.path.join(root,f) for f in fs)
+
+	if not files:
+		print ('Cannot Access Files')
+		raise IOError
 	
 	print ('Processing files...')
 
@@ -87,50 +91,56 @@ def process_data(path_to_device, day):
 			power.extend(power_sig)
 
 			if day in file:
+				current_power = power_sig
 				break
 
-	return power
+	return power, current_power
 
 def threshold_of_device(path_to_device, no_thresholds_required, day):
 
 	t0 = time.clock()
-	power = process_data(path_to_device, day)
+	power, current_power = process_data(path_to_device, day)
 
 	if no_thresholds_required == 1:
-		threshold = get_otsus_threshold(power)
+		threshold = var_round(get_otsus_threshold(power))
 	else:
 		threshold = get_jenks_threshold(power, no_thresholds_required)
 
 	if no_thresholds_required == 1:
 		
-	
-		power_th = np.array([p for p in power if p <= threshold])
+		p_th_ov = [p for p in power if p <= threshold]
+		
+		if len(p_th_ov)/len(power) > 0.55:
+			threshold_day = var_round(get_otsus_threshold(current_power))
 
-		print (len(power_th)/len(power))
+			if np.average(p_th_ov) < threshold_day or np.absolute(threshold-threshold_day)/threshold > 0.05:
+				power_th = np.array([p for p in power if p <= threshold_day])
+				x = np.array([[i] for i in range(0,len(power_th))])
+				print ('RANSAC')
+				threshold_temp = 0
+				for iteration in range(5):
+					#### ransac
+					ransac = linear_model.RANSACRegressor()
+					ransac.fit(x, power_th)
+					new_y = ransac.predict(x)
 
-		if len(power_th)/len(power) > 0.5:
-			print ('RANSAC')
-			#### ransac
-			x = np.array([[i] for i in range(0,len(power_th))])
-			ransac = linear_model.RANSACRegressor()
-			ransac.fit(x, power_th)
-			new_y = ransac.predict(x)
+					#### lse
+					min_lse = np.inf
+					for y in new_y:
+						lse = np.average((power_th-y)**2)
+						if min_lse > lse:
+							min_lse = lse
+							threshold = y
 
-			#### lse
-			min_lse = np.inf
-			for y in range(int(new_y[0]), int(new_y[1])+1):
-				lse = np.sum((new_y-y)**2)
-				if min_lse > lse:
-					min_lse = lse
-					threshold = y
-
+					threshold_temp = threshold_temp + threshold
+				threshold = var_round(threshold_temp/5)
 		
 	print (threshold)
 	print ('Took ', time.clock()-t0, 's')
 	return threshold
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
 
-# 	# th = threshold_of_device('/media/milan/DATA/Qrera/Paragon', 1, '2018_04_05')
+	th = threshold_of_device('/media/milan/DATA/Qrera/Cannula', 1, '2018_04_26')
 	
