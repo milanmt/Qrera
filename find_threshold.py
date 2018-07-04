@@ -59,7 +59,10 @@ def filter_data(power_sig):
 	power_smoothed = [var_round(np.mean(power_sig[i:i+FILTER_WINDOW])) 
 	for i in range(power_sig.shape[0]-FILTER_WINDOW+1) if i%FILTER_WINDOW == 0]
 	
-	return power_smoothed
+	if not power_smoothed:
+		return [0]
+	else:
+		return power_smoothed
 
 
 def process_data(path_to_device, day):
@@ -79,68 +82,116 @@ def process_data(path_to_device, day):
 
 	files.sort()
 
+	power_f = []
 	power = []
 	for file in files:
 		if file.endswith('.csv.gz'):
 			pd_entries = pandas.read_csv(file, engine="python")
 			try:
 				power_sig = filter_data(pd_entries['POWER'])
+				power.extend([p for p in pd_entries['POWER']])
 			except KeyError:
 				power_sig = filter_data(pd_entries['VALUE'])
+				power.extend([p for p in pd_entries['VALUE']])
 
-			power.extend(power_sig)
+			if not all(p == 0 for p in power_sig):
+				power_f.extend(power_sig)
 
 			if day in file:
-				current_power = power_sig
+				current_power_f = power_sig
 				break
 
-	return power, current_power
+	return power_f, power, current_power_f
 
 def threshold_of_device(path_to_device, no_thresholds_required, day):
 
 	t0 = time.clock()
-	power, current_power = process_data(path_to_device, day)
+	power_f, power, current_power_f = process_data(path_to_device, day)
 
 	if no_thresholds_required == 1:
-		threshold = var_round(get_otsus_threshold(power))
+		threshold = var_round(get_otsus_threshold(power_f))
+		print (threshold, 'overall threshold')
 	else:
-		threshold = get_jenks_threshold(power, no_thresholds_required)
+		threshold = get_jenks_threshold(power_f, no_thresholds_required)
 
 	if no_thresholds_required == 1:
 		
+		print ('Filtering raw values for RANSAC')
+
 		p_th_ov = [p for p in power if p <= threshold]
-		
-		if len(p_th_ov)/len(power) > 0.55:
-			threshold_day = var_round(get_otsus_threshold(current_power))
+		p_th_ov_avg = np.average(p_th_ov)
+		threshold_day = var_round(get_otsus_threshold(current_power_f))
+		print(threshold_day, 'day threshold')
+		print(p_th_ov_avg, 'overall average')
 
-			if np.average(p_th_ov) < threshold_day or np.absolute(threshold-threshold_day)/threshold > 0.05:
+		p_th_avg = [p for p in power if p <= p_th_ov_avg]
+		print (len(p_th_avg)/len(p_th_ov))
+
+		if len(p_th_avg) > 0.5*len(p_th_ov) and p_th_ov_avg < 0.4*threshold:
+			print ('fitting line to values below avg')
+			power_th = p_th_avg
+
+		elif p_th_ov_avg < threshold_day and (threshold_day-p_th_ov_avg)/threshold_day > 0.1:
+			if threshold_day > threshold:
+				print ('fitting line to values below avg of two thresholds')
+				power_th = np.array([p for p in power if p <= (threshold_day+threshold)/2])
+
+			else:
+				print ('fitting line to values below day threshold')
 				power_th = np.array([p for p in power if p <= threshold_day])
-				x = np.array([[i] for i in range(0,len(power_th))])
-				print ('RANSAC')
-				threshold_temp = 0
-				for iteration in range(5):
-					#### ransac
-					ransac = linear_model.RANSACRegressor()
-					ransac.fit(x, power_th)
-					new_y = ransac.predict(x)
-
-					#### lse
-					min_lse = np.inf
-					for y in new_y:
-						lse = np.average((power_th-y)**2)
-						if min_lse > lse:
-							min_lse = lse
-							threshold = y
-
-					threshold_temp = threshold_temp + threshold
-				threshold = var_round(threshold_temp/5)
 		
-	print (threshold)
+		else:
+			print ('fitting line to values below orig threshold')
+			power_th = p_th_ov
+				
+		x = np.array([[i] for i in range(0,len(power_th))])
+				
+
+		print ('RANSAC')
+		threshold_temp = 0
+		for iteration in range(3):
+			#### ransac
+			try:
+				ransac = linear_model.RANSACRegressor()						
+				ransac.fit(x, power_th)
+				new_y = ransac.predict(x)
+
+				plt.plot(x, new_y)
+				plt.scatter(x,power_th)
+				plt.show()
+
+			except ValueError:
+				new_y = [threshold]
+
+			#### lse
+			min_lse = np.inf
+			mod_new_y = np.unique([round(y) for y in new_y])
+			if new_y[0] <= new_y[-1]:
+				min_val = new_y[0]
+				max_val = new_y[-1]
+			else:
+				min_val = new_y[-1]
+				max_val = new_y[0]
+				
+			mod_power_th = np.array([p for p in power_th if p >= min_val and p <= max_val])
+	
+			for y in mod_new_y:
+				lse = np.average((mod_power_th-y)**2)
+				if min_lse > lse:
+					min_lse = lse
+					threshold = y
+
+			print (threshold)
+			threshold_temp = threshold_temp + threshold
+	
+		threshold = var_round(threshold_temp/3)
+		
+	print (threshold, 'final')
 	print ('Took ', time.clock()-t0, 's')
 	return threshold
 
 
 if __name__ == '__main__':
 
-	th = threshold_of_device('/media/milan/DATA/Qrera/Cannula', 1, '2018_04_26')
+	th = threshold_of_device('/media/milan/DATA/Qrera/HiraAutomation', 1, '2018_06_27')
 	
