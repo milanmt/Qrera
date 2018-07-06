@@ -117,16 +117,16 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 	if no_thresholds_required == 1:
 		
 		p_th_ov = power[power <= threshold]
-
+		amount_under_th = round(p_th_ov.shape[0]/power.shape[0],1)
 		# print (p_th_ov.shape[0]/power.shape[0])
-		if round(p_th_ov.shape[0]/power.shape[0]) >= 0.5:
+		if amount_under_th >= 0.5:
 			
 			p_th_ov_avg = np.mean(p_th_ov)
 			threshold_day = var_round(get_otsus_threshold(current_power_f))
 			# print(threshold_day, 'day threshold')
 			# print(p_th_ov_avg, 'overall average')
 
-			if round(p_th_ov.shape[0]/power.shape[0], 1) == 0.5:
+			if amount_under_th == 0.5:
 				print ('fitting line to values below orig threshold and above avg')
 				power_th = p_th_ov[p_th_ov > p_th_ov_avg]
 
