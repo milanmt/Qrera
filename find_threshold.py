@@ -2,7 +2,7 @@
 
 import os
 import time
-import pandas
+import pandas as pd
 import jenkspy 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,14 +55,14 @@ def var_round(number):
 
 def filter_data(power_sig):
 	
-	## Smoothing Filter
-	power_smoothed = [var_round(np.mean(power_sig[i:i+FILTER_WINDOW])) 
-	for i in range(power_sig.shape[0]-FILTER_WINDOW+1) if i%FILTER_WINDOW == 0]
+	## Smoothing Filter 
+	power_smoothed = [var_round(sum(power_sig[i:i+FILTER_WINDOW])/FILTER_WINDOW) 
+	for i in range(0,power_sig.shape[0],FILTER_WINDOW)]
 	
 	if not power_smoothed:
 		return [0]
 	else:
-		return power_smoothed
+		return pd.Series(power_smoothed)
 
 
 def process_data(path_to_device, day):
@@ -86,7 +86,7 @@ def process_data(path_to_device, day):
 	power = []
 	for file in files:
 		if file.endswith('.csv.gz'):
-			pd_entries = pandas.read_csv(file, engine="python")
+			pd_entries = pd.read_csv(file, engine="python")
 			try:
 				power_sig = filter_data(pd_entries['POWER'])
 				power.extend([p for p in pd_entries['POWER']])
@@ -101,7 +101,7 @@ def process_data(path_to_device, day):
 				current_power_f = power_sig
 				break
 
-	return power_f, power, current_power_f
+	return pd.Series(power_f), pd.Series(power), pd.Series(current_power_f)
 
 def threshold_of_device(path_to_device, no_thresholds_required, day):
 
@@ -116,82 +116,60 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 
 	if no_thresholds_required == 1:
 		
-		print ('Filtering raw values for RANSAC')
+		p_th_ov = power[power <= threshold]
 
-		p_th_ov = [p for p in power if p <= threshold]
-		p_th_ov_avg = np.average(p_th_ov)
-		threshold_day = var_round(get_otsus_threshold(current_power_f))
-		print(threshold_day, 'day threshold')
-		print(p_th_ov_avg, 'overall average')
+		# print (p_th_ov.shape[0]/power.shape[0])
+		if round(p_th_ov.shape[0]/power.shape[0]) >= 0.5:
+			
+			p_th_ov_avg = np.mean(p_th_ov)
+			threshold_day = var_round(get_otsus_threshold(current_power_f))
+			# print(threshold_day, 'day threshold')
+			# print(p_th_ov_avg, 'overall average')
 
-		p_th_avg = [p for p in power if p <= p_th_ov_avg]
-		print (len(p_th_avg)/len(p_th_ov))
+			if round(p_th_ov.shape[0]/power.shape[0], 1) == 0.5:
+				print ('fitting line to values below orig threshold and above avg')
+				power_th = p_th_ov[p_th_ov > p_th_ov_avg]
 
-		if len(p_th_avg) > 0.5*len(p_th_ov) and p_th_ov_avg < 0.4*threshold:
-			print ('fitting line to values below avg')
-			power_th = p_th_avg
-
-		elif p_th_ov_avg < threshold_day and (threshold_day-p_th_ov_avg)/threshold_day > 0.1:
-			if threshold_day > threshold:
+			elif p_th_ov_avg < threshold_day and (threshold_day-p_th_ov_avg)/threshold_day > 0.1:
 				print ('fitting line to values below avg of two thresholds')
-				power_th = np.array([p for p in power if p <= (threshold_day+threshold)/2])
-
-			else:
-				print ('fitting line to values below day threshold')
-				power_th = np.array([p for p in power if p <= threshold_day])
+				power_th = power[power <= (threshold_day+threshold)/2]
 		
-		else:
-			print ('fitting line to values below orig threshold')
-			power_th = p_th_ov
-				
-		x = np.array([[i] for i in range(0,len(power_th))])
-				
-
-		print ('RANSAC')
-		threshold_temp = 0
-		for iteration in range(3):
-			#### ransac
-			try:
-				ransac = linear_model.RANSACRegressor()						
-				ransac.fit(x, power_th)
-				new_y = ransac.predict(x)
-
-				plt.plot(x, new_y)
-				plt.scatter(x,power_th)
-				plt.show()
-
-			except ValueError:
-				new_y = [threshold]
-
-			#### lse
-			min_lse = np.inf
-			mod_new_y = np.unique([round(y) for y in new_y])
-			if new_y[0] <= new_y[-1]:
-				min_val = new_y[0]
-				max_val = new_y[-1]
 			else:
-				min_val = new_y[-1]
-				max_val = new_y[0]
+				print ('fitting line to values below orig threshold')
+				power_th = p_th_ov
 				
-			mod_power_th = np.array([p for p in power_th if p >= min_val and p <= max_val])
-	
-			for y in mod_new_y:
-				lse = np.average((mod_power_th-y)**2)
-				if min_lse > lse:
-					min_lse = lse
-					threshold = y
+			x = np.array([[i] for i in range(0,power_th.shape[0])])
+				
 
-			print (threshold)
-			threshold_temp = threshold_temp + threshold
+			print ('RANSAC')
+			threshold_temp = 0
+			for iteration in range(3):
+				#### ransac
+				try:
+					ransac = linear_model.RANSACRegressor()						
+					ransac.fit(x, power_th)
+					new_y = ransac.predict(x)
+
+					# plt.plot(x, new_y)
+					# plt.scatter(x,power_th)
+					# plt.show()
+
+				except ValueError:
+					new_y = [threshold]
+
+				threshold_temp = threshold_temp + (new_y[0]+new_y[-1])/2
 	
-		threshold = var_round(threshold_temp/3)
+			threshold = var_round(threshold_temp/3)
+
 		
-	print (threshold, 'final')
+	print (threshold)
 	print ('Took ', time.clock()-t0, 's')
 	return threshold
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 
-	th = threshold_of_device('/media/milan/DATA/Qrera/HiraAutomation', 1, '2018_06_27')
+	# th = threshold_of_device('/media/milan/DATA/Qrera/Aureate/0E59BE', 1, '2018_04_13')
+
+	# th = threshold_of_device('/media/milan/DATA/Qrera/Cannula', 1, '2018_05_21')
 	
