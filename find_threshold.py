@@ -125,8 +125,8 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 			p_th_ov_avg = np.mean(p_th_ov)
 			threshold_day = var_round(get_otsus_threshold(current_power_f))
 			avg_threshold = (threshold+threshold_day)/2
-			print(threshold_day, 'day threshold')
-			print(p_th_ov_avg, 'overall average')
+			# print(threshold_day, 'day threshold')
+			# print(p_th_ov_avg, 'overall average')
 
 			if amount_under_th == 0.5:
 				print ('fitting line to values below orig threshold and around first histogram peak')
@@ -141,12 +141,16 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 				
 				for i in range(len(peaks_ind)):
 					if peaks_ind[i] >= th_bin_no:
+						peaks_ind_th = peaks_ind[:i]
 						second_peak_ind = peaks_ind[i-2]+2
 						break
 
-				second_peak_val = hist_bins[second_peak_ind]
-				print (second_peak_val)
-				power_th = power[(power>=second_peak_val) & (power <= threshold)]
+				if len(peaks_ind_th) == 1:
+					power_th = p_th_ov
+
+				else:	
+					second_peak_val = hist_bins[second_peak_ind]
+					power_th = power[(power>=second_peak_val) & (power <= threshold)]
 	
 
 			elif p_th_ov_avg < threshold_day and (threshold_day-p_th_ov_avg)/threshold_day > 0.1:
@@ -169,14 +173,14 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 					ransac.fit(x, power_th)
 					new_y = ransac.predict(x)
 
-					plt.plot(x, new_y)
-					plt.scatter(x,power_th)
-					plt.show()
+					# plt.plot(x, new_y)
+					# plt.scatter(x,power_th)
+					# plt.show()
 
 				except ValueError:
 					new_y = [threshold]
 
-				threshold_temp = threshold_temp + max([new_y[-1], new_y[0]])
+				threshold_temp = threshold_temp + (new_y[-1]+new_y[0])/2
 	
 			threshold = var_round(threshold_temp/3)
 
