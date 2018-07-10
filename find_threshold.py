@@ -7,6 +7,7 @@ import jenkspy
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import linear_model
+from scipy.signal import argrelmax
 
 FILTER_WINDOW = 300 
 
@@ -118,21 +119,39 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 		
 		p_th_ov = power[power <= threshold]
 		amount_under_th = round(p_th_ov.shape[0]/power.shape[0],1)
-		# print (p_th_ov.shape[0]/power.shape[0])
+		print (p_th_ov.shape[0]/power.shape[0])
 		if amount_under_th >= 0.5:
 			
 			p_th_ov_avg = np.mean(p_th_ov)
 			threshold_day = var_round(get_otsus_threshold(current_power_f))
-			# print(threshold_day, 'day threshold')
-			# print(p_th_ov_avg, 'overall average')
+			avg_threshold = (threshold+threshold_day)/2
+			print(threshold_day, 'day threshold')
+			print(p_th_ov_avg, 'overall average')
 
 			if amount_under_th == 0.5:
-				print ('fitting line to values below orig threshold and above avg')
-				power_th = p_th_ov[p_th_ov > p_th_ov_avg]
+				print ('fitting line to values below orig threshold and around first histogram peak')
+				hist_vals, hist_bins = np.histogram(power, bins='fd')
+				peaks_ind = argrelmax(hist_vals, order=10)[0]
+
+				th_bin_no = 0
+				for i in range(len((hist_bins))):
+					if threshold >= hist_bins[i] and threshold <= hist_bins[i+1]:
+						th_bin_no = i
+						break
+				
+				for i in range(len(peaks_ind)):
+					if peaks_ind[i] >= th_bin_no:
+						second_peak_ind = peaks_ind[i-2]+2
+						break
+
+				second_peak_val = hist_bins[second_peak_ind]
+				print (second_peak_val)
+				power_th = power[(power>=second_peak_val) & (power <= threshold)]
+	
 
 			elif p_th_ov_avg < threshold_day and (threshold_day-p_th_ov_avg)/threshold_day > 0.1:
 				print ('fitting line to values below avg of two thresholds')
-				power_th = power[power <= (threshold_day+threshold)/2]
+				power_th = power[power <= avg_threshold]
 		
 			else:
 				print ('fitting line to values below orig threshold')
@@ -150,14 +169,14 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 					ransac.fit(x, power_th)
 					new_y = ransac.predict(x)
 
-					# plt.plot(x, new_y)
-					# plt.scatter(x,power_th)
-					# plt.show()
+					plt.plot(x, new_y)
+					plt.scatter(x,power_th)
+					plt.show()
 
 				except ValueError:
 					new_y = [threshold]
 
-				threshold_temp = threshold_temp + (new_y[0]+new_y[-1])/2
+				threshold_temp = threshold_temp + max([new_y[-1], new_y[0]])
 	
 			threshold = var_round(threshold_temp/3)
 
@@ -167,9 +186,9 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 	return threshold
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
 
-	# th = threshold_of_device('/media/milan/DATA/Qrera/Aureate/0E59BE', 1, '2018_04_13')
+	# th = threshold_of_device('/media/milan/DATA/Qrera/Aureate/39E078', 1, '2017_11_05')
 
-	# th = threshold_of_device('/media/milan/DATA/Qrera/Cannula', 1, '2018_05_21')
+	th = threshold_of_device('/media/milan/DATA/Qrera/AutoAcc', 1, '2018_02_20')
 	
