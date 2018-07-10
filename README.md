@@ -6,7 +6,7 @@
 Finding pattern may help in coming up with a more accurate threshold or thresholds.
 
 Threshold Finder:
-Combination of Otsus and RANSAC. To stabilise values, a decreasing exponential can be used as a weighting function find the weighted average. This rerquires storage of all threshold values till date.
+Combination of Otsus and RANSAC. To stabilise values, a decreasing exponential can be used as a weighting function to find the weighted average. This rerquires storage of all threshold values till date.
 
 
 To Download:
