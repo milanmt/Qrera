@@ -84,19 +84,23 @@ if __name__ == '__main__':
 
 	power_f = preprocess_power(df)
 
-	power_rf = [var_round(p) for p in power_f if p > 0]
+	peaks, _ = find_peaks(power_f)
+	peak_p = power_f[peaks]
 	
-	peak_threshold = find_threshold.get_otsus_threshold(power_rf)
+	peak_pr = [var_round(p) for p in peak_p]
+	peak_threshold = find_threshold.get_otsus_threshold(peak_pr)
 	print ('peak_threshold', peak_threshold)
 
+	# peak_threshold = 3000
+	final_peaks = np.zeros((len(power_f)))
+	for p in peaks:
+		if power_f[p] > peak_threshold:
+			final_peaks[p] = power_f[p]
 	
-	peaks, _ = find_peaks(power_f, height=peak_threshold)
-	peak_p = np.zeros((len(power_f)))
-	peak_p[peaks] = power_f[peaks]
-	# plt.plot(power_f)
-	# plt.stem(peak_p)
-	# plt.show()
-	total_peaks = len(peaks)
+	plt.plot(power_f)
+	plt.stem(final_peaks)
+	plt.show()
+	total_peaks = len([p for p in final_peaks if p != 0])
 
 	print ('Total Peaks:', total_peaks)
 
