@@ -12,7 +12,7 @@ import time
 import os
 
 
-# THRESHOLD = 2610
+THRESHOLD = 2610
 
 def zero_cross_detector(sig):
 	indices = []
@@ -49,12 +49,13 @@ def preprocess_power(f1, f2):
 	df2 = pd.read_csv(f2)
 	df1.sort_values(by='TS')
 	df2.sort_values(by='TS')
-	df = pd.concat([df1,df2])	
-
+	df = pd.concat([df1,df2])
 	start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
 	end_time = datetime.isoformat(timedelta(days=1) + datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S'), sep=' ')
 
 	df = df[(df['TS'] >= start_time) & (df['TS'] < end_time)]
+
+	df.to_csv('checking.csv')
 
 	df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
 
@@ -75,19 +76,21 @@ def preprocess_power(f1, f2):
 
 
 	## Thresholding Signal   ## This is necessary if you plan to distinguish cycles based on threshold.
-	# power = pd.Series(power).apply(lambda x: x if x > THRESHOLD else THRESHOLD)
+	power = pd.Series(power).apply(lambda x: x if x > THRESHOLD else THRESHOLD)
 
 	## Smoothing 
+	print ('Filtering signal ...')
 	power_f = lpf(power)
 
 	### Differencing filter
+	print ('Differentiating signal ...')
 	p_detrend = []
 	for i in range(len(power_f)-1):
 		p_detrend.append(power_f[i+1]-power_f[i])
 
 	## Smoothing derivative
+	print ('Smoothing derivative of signal ...')
 	power_d = lpf(p_detrend)
-
 
 	return power_d, power_f
 
@@ -106,8 +109,8 @@ def get_required_files(device_path, day):
 			for f in files:
 				if day in f and f.endswith('.csv.gz'):
 					file1 = os.path.join(root,f)
-				
-				if file1 and f > file1:
+
+				if file1 and os.path.join(root,f) > file1:
 					file2 =  os.path.join(root,f)
 					end_search = True
 					break
@@ -124,7 +127,7 @@ def detect_peaks(power_d, power_f):
 	peaks = zero_cross_detector(power_d)  # Returns indices 
 	peaks = peaks+1
 	
-	## For obtaining actuals signal with peaks.
+	## For obtaining actual signal with peaks.
 	# peak_p = np.zeros((len(power_d)))
 	# peak_p[peaks] = power_f[peaks]
 
@@ -132,15 +135,14 @@ def detect_peaks(power_d, power_f):
 
 	return final_peaks, peaks
 
-def peaks_to_discrete_states(final_peaks)
+def peaks_to_discrete_states(final_peaks):
 	#### BayesianGaussianMixture
 
 	total_peaks = np.array(final_peaks)
 	X = total_peaks.reshape(-1,1)
 
-	dpgmm = BayesianGaussianMixture(n_components=10,covariance_type='full').fit(X)
+	dpgmm = BayesianGaussianMixture(n_components=10,covariance_type='full', n_init=3).fit(X)
 	labels = dpgmm.predict(X)
-
 
 	return labels
 
@@ -148,7 +150,7 @@ def peaks_to_discrete_states(final_peaks)
 if __name__ == '__main__':
 
 	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_06'
+	day = '2018_07_07'
 
 	file1, file2 = get_required_files(device_path, day)
 
@@ -156,7 +158,8 @@ if __name__ == '__main__':
 
 	final_peaks, peak_indices = detect_peaks(power_d, power_f)
 
-	labels = peaks_to_discrete_states(final_peaks)
+	# labels = peaks_to_discrete_states(final_peaks)
+
 
 	################ Visualization
 
@@ -201,15 +204,15 @@ if __name__ == '__main__':
 	
 
 	####################### Filtering peaks with a threshold
-	# peak_pr = [var_round(p) for p in peak_p]
-	# peak_threshold = find_threshold.get_otsus_threshold(peak_pr)
-	# print ('peak_threshold', peak_threshold)
+	peak_pr = [var_round(p) for p in final_peaks]
+	peak_threshold = find_threshold.get_otsus_threshold(peak_pr)
+	print ('peak_threshold', peak_threshold)
 
-	# final_peaks = np.zeros((len(power_f)))
-	# for p in peaks:
-	# 	if power_f[p] > peak_threshold:
-	# 		final_peaks[p] = power_f[p]
+	for p in range(len(final_peaks)):
+		if final_peaks[p] < peak_threshold:
+			final_peaks[p] = 0
 	
-	# total_peaks = [p for p in final_peaks if p != 0]
+	total_peaks = [p for p in final_peaks if p != 0]
+	print( 'Total Peaks Count: ', len(total_peaks))
 	
 	########################
