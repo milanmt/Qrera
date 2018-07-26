@@ -131,8 +131,9 @@ def get_freq_sequences(state_attributes, time_based_algorithm=True):
 
 	seq_support_f = []
 	for seq, support in seq_support:
-		if np.std(seq) != 0 and seq[0] == seq[-1]:
-			seq_support_f.append((seq, support))
+		if len(seq) > 1:
+			if np.std(seq) != 0 and seq[0] == seq[-1]:
+				seq_support_f.append((seq, support))
 
 	max_subseq = []
 	max_count = max(x[1] for x in seq_support_f)
