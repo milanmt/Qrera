@@ -174,9 +174,7 @@ if __name__ == '__main__':
 
 	timedb_file = pm.generate_timeseries_db(time_based_algorithm=False)
 
-	subprocess.call('java -jar spmf.jar run VGEN trials/timedb_test.txt output.txt 0.3 1 1 2 10',cwd='/media/milan/DATA/Qrera',shell=True)
+	# subprocess.call('java -jar spmf.jar run Fournier08-Closed+time trials/timedb_test.txt output.txt 0.3 1 1 2 10',cwd='/media/milan/DATA/Qrera',shell=True)
+	subprocess.call('java -jar spmf.jar run VGEN trials/timedb_test.txt output.txt 0.3 10 1 false',cwd='/media/milan/DATA/Qrera',shell=True)
 	
 	get_freq_sequences(state_attributes)
-
-	
-    # Fournier08-Closed+time
