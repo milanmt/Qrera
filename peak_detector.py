@@ -76,7 +76,7 @@ def preprocess_power(f1, f2):
 
 
 	## Thresholding Signal   ## This is necessary if you plan to distinguish cycles based on threshold.
-	power = pd.Series(power).apply(lambda x: x if x > THRESHOLD else THRESHOLD)
+	# power = pd.Series(power).apply(lambda x: x if x > THRESHOLD else THRESHOLD)
 
 	## Smoothing 
 	print ('Filtering signal ...')
@@ -141,16 +141,35 @@ def peaks_to_discrete_states(final_peaks):
 	total_peaks = np.array(final_peaks)
 	X = total_peaks.reshape(-1,1)
 
-	dpgmm = BayesianGaussianMixture(n_components=10,covariance_type='full', n_init=3).fit(X)
+	dpgmm = BayesianGaussianMixture(n_components=10,covariance_type='spherical', n_init=3).fit(X)
 	labels = dpgmm.predict(X)
+	states = np.unique(labels)
 
-	return labels
+	state_attributes = dict()
+	for s in states:
+		state_attributes.update({ s : (dpgmm.means_[s], dpgmm.covariances_[s])})
+	
+	print ('Number of states: ', len(np.unique(labels)), states)
+
+	color=['navy', 'c', 'cornflowerblue', 'gold','darkorange', 'r', 'g', 'm', 'y', 'k']
+	
+	color_labels = []
+	for label in labels:
+		color_labels.append(color[int(label)])
+
+	print ([ color[s] for s in states])
+
+	plt.scatter(range(len(final_peaks)), final_peaks, color= color_labels)
+	plt.show()
+
+
+	return labels, state_attributes
 
 
 if __name__ == '__main__':
 
 	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_07'
+	day = '2018_07_06'
 
 	file1, file2 = get_required_files(device_path, day)
 
@@ -158,7 +177,7 @@ if __name__ == '__main__':
 
 	final_peaks, peak_indices = detect_peaks(power_d, power_f)
 
-	# labels = peaks_to_discrete_states(final_peaks)
+	labels = peaks_to_discrete_states(final_peaks)
 
 
 	################ Visualization
@@ -204,15 +223,15 @@ if __name__ == '__main__':
 	
 
 	####################### Filtering peaks with a threshold
-	peak_pr = [var_round(p) for p in final_peaks]
-	peak_threshold = find_threshold.get_otsus_threshold(peak_pr)
-	print ('peak_threshold', peak_threshold)
+	# peak_pr = [var_round(p) for p in final_peaks]
+	# peak_threshold = find_threshold.get_otsus_threshold(peak_pr)
+	# print ('peak_threshold', peak_threshold)
 
-	for p in range(len(final_peaks)):
-		if final_peaks[p] < peak_threshold:
-			final_peaks[p] = 0
+	# for p in range(len(final_peaks)):
+	# 	if final_peaks[p] < peak_threshold:
+	# 		final_peaks[p] = 0
 	
-	total_peaks = [p for p in final_peaks if p != 0]
-	print( 'Total Peaks Count: ', len(total_peaks))
+	# total_peaks = [p for p in final_peaks if p != 0]
+	# print( 'Total Peaks Count: ', len(total_peaks))
 	
 	########################
