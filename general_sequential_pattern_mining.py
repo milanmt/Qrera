@@ -98,21 +98,36 @@ class SequentialPatternMining:
 
 
 
-def get_freq_sequences(state_attributes):
+def get_freq_sequences(state_attributes, time_based_algorithm=True):
 	output_file_name = '/media/milan/DATA/Qrera/output.txt'
 	seq_support = []
 	with open(output_file_name, 'r') as f:
-		for line in f:
-			temp_l = line.split(' -1 ')
-			seq = []
-			support = 0 
-			for s in temp_l:
-				if '<' in s and '>' in s:
-					seq.append(int(s.split(' ')[1]))
-				elif '#SUP' in s:
-					support = int(s.split(':')[1].strip())
+		if time_based_algorithm == True:
+			for line in f:
+				temp_l = line.split(' -1 ')
+				seq = []
+				support = 0 
+				for s in temp_l:
+					if '<' in s and '>' in s:
+						seq.append(int(s.split(' ')[1]))
+					elif '#SUP' in s:
+						support = int(s.split(':')[1].strip())
 
-			seq_support.append((seq, support))
+				seq_support.append((seq, support))
+
+		else:
+			for line in f:
+				temp_l = line.split(' -1 ')
+				seq = []
+				support = 0 
+				for s in temp_l:
+					if '#SUP' in s:
+						support = int(s.split(':')[1].strip())
+					else:
+						seq.append(int(s))
+
+				seq_support.append((seq, support))
+
 
 	seq_support_f = []
 	for seq, support in seq_support:
@@ -177,4 +192,4 @@ if __name__ == '__main__':
 	# subprocess.call('java -jar spmf.jar run Fournier08-Closed+time trials/timedb_test.txt output.txt 0.3 1 1 2 10',cwd='/media/milan/DATA/Qrera',shell=True)
 	subprocess.call('java -jar spmf.jar run VGEN trials/timedb_test.txt output.txt 0.3 10 1 false',cwd='/media/milan/DATA/Qrera',shell=True)
 	
-	get_freq_sequences(state_attributes)
+	get_freq_sequences(state_attributes, time_based_algorithm=False)
