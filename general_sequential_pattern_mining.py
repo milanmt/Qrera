@@ -143,25 +143,29 @@ def get_freq_sequences(state_attributes, time_based_algorithm=True):
 			max_subseq.append(subseq)
 
 
-	p_dist = np.zeros((len(max_subseq), len(max_subseq)))
-
 	print (max_subseq)
 
-	for i in range(len(max_subseq)):
-		for j in range(len(max_subseq)):
-			a = list(max_subseq[i])
-			b = list(max_subseq[j])
-			p_dist[i][j] = levenshtein_distance(a,b)
+	if len(max_subseq) > 1:
+		p_dist = np.zeros((len(max_subseq), len(max_subseq)))
 
 
-	p_dist = p_dist/np.max(p_dist)
+		for i in range(len(max_subseq)):
+			for j in range(len(max_subseq)):
+				a = list(max_subseq[i])
+				b = list(max_subseq[j])
+				p_dist[i][j] = levenshtein_distance(a,b)
 
-	p_dist = 1 - p_dist
+
+		p_dist = p_dist/np.max(p_dist)
+		p_dist = 1 - p_dist
 
 
-	ap = AffinityPropagation(affinity='precomputed')
-	ap.fit(p_dist)
-	final_subseqs = [ max_subseq[ind] for ind in ap.cluster_centers_indices_]
+		ap = AffinityPropagation(affinity='precomputed')
+		ap.fit(p_dist)
+		final_subseqs = [ max_subseq[ind] for ind in ap.cluster_centers_indices_]
+
+	else:
+		final_subseqs = max_subseq
 	
 	print(final_subseqs)
 
@@ -188,9 +192,9 @@ if __name__ == '__main__':
 
 	pm = SequentialPatternMining(array, state_attributes)
 
-	timedb_file = pm.generate_timeseries_db(time_based_algorithm=False)
+	timedb_file = pm.generate_timeseries_db(time_based_algorithm=True)
 
-	# subprocess.call('java -jar spmf.jar run Fournier08-Closed+time trials/timedb_test.txt output.txt 0.3 1 1 2 10',cwd='/media/milan/DATA/Qrera',shell=True)
-	subprocess.call('java -jar spmf.jar run VGEN trials/timedb_test.txt output.txt 0.3 10 1 false',cwd='/media/milan/DATA/Qrera',shell=True)
+	subprocess.call('java -jar spmf.jar run Fournier08-Closed+time trials/timedb_test.txt output.txt 0.3 1 1 2 10',cwd='/media/milan/DATA/Qrera',shell=True)
+	# subprocess.call('java -jar spmf.jar run VGEN trials/timedb_test.txt output.txt 0.3 10 1 false',cwd='/media/milan/DATA/Qrera',shell=True)
 	
-	get_freq_sequences(state_attributes, time_based_algorithm=False)
+	get_freq_sequences(state_attributes, time_based_algorithm=True)
