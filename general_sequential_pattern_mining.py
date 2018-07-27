@@ -5,6 +5,7 @@ import peak_detector as pd
 import numpy as np
 import subprocess
 import pandas 
+import json
 
 def levenshtein_distance(a,b):
 	lev_m = np.zeros((len(a)+1,len(b)+1))
@@ -145,27 +146,26 @@ def get_freq_sequences(state_attributes, time_based_algorithm=True):
 
 	print (max_subseq)
 
-	if len(max_subseq) > 1:
-		p_dist = np.zeros((len(max_subseq), len(max_subseq)))
+	if len(max_subseq) < 2:
+		max_count2 = max(x[1] for x in seq_support_f if x[1] != max_count)
+		for subseq, count in seq_support_f:
+			if max_count2 == count:
+				max_subseq.append(subseq)
 
+	print (max_subseq)
 
-		for i in range(len(max_subseq)):
-			for j in range(len(max_subseq)):
-				a = list(max_subseq[i])
-				b = list(max_subseq[j])
-				p_dist[i][j] = levenshtein_distance(a,b)
+	p_dist = np.zeros((len(max_subseq), len(max_subseq)))
+	for i in range(len(max_subseq)):
+		for j in range(len(max_subseq)):
+			a = list(max_subseq[i])
+			b = list(max_subseq[j])
+			p_dist[i][j] = levenshtein_distance(a,b)
+	p_dist = p_dist/np.max(p_dist)
+	p_dist = 1 - p_dist
 
-
-		p_dist = p_dist/np.max(p_dist)
-		p_dist = 1 - p_dist
-
-
-		ap = AffinityPropagation(affinity='precomputed')
-		ap.fit(p_dist)
-		final_subseqs = [ max_subseq[ind] for ind in ap.cluster_centers_indices_]
-
-	else:
-		final_subseqs = max_subseq
+	ap = AffinityPropagation(affinity='precomputed')
+	ap.fit(p_dist)
+	final_subseqs = [ max_subseq[ind] for ind in ap.cluster_centers_indices_]
 	
 	print(final_subseqs)
 
@@ -173,28 +173,41 @@ def get_freq_sequences(state_attributes, time_based_algorithm=True):
 	for seq in final_subseqs:
 		var = 0
 		for s in seq:
-			var = var + state_attributes[s][1]
+			var = var + state_attributes[str(s)][1]
 		final_variances.append(var)
 
 	print (final_variances)
+
+	max_var_ind = final_variances.index(max(final_variances))
+	selected_pattern = final_subseqs[max_var_ind]
+
+	print (selected_pattern)
+
+	return selected_pattern
 
 
 
 if __name__ == '__main__':
 	# array = [1, 2, 3, 3, 1, 2, 3, 5, 1, 2, 3, 1, 2, 3,5, 5, 5, 5, 1, 2, 2, 1, 2, 2, 3, 5, 1, 2, 3, 5, 5, 1, 1, 2, 2, 3, 3, 5, 1, 2, 3, 5]
 
-	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_06'
-	file1, file2 = pd.get_required_files(device_path, day)
-	power_d, power_f = pd.preprocess_power(file1, file2)
-	final_peaks, peak_indices = pd.detect_peaks(power_d, power_f)
-	array, state_attributes = pd.peaks_to_discrete_states(final_peaks)
+	# device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
+	# day = '2018_07_07'
+	# file1, file2 = pd.get_required_files(device_path, day)
+	# power_d, power_f = pd.preprocess_power(file1, file2)
+	# final_peaks, peak_indices = pd.detect_peaks(power_d, power_f)
+	# array, state_attributes = pd.peaks_to_discrete_states(final_peaks)
 
-	pm = SequentialPatternMining(array, state_attributes)
+	# with open('state_attributes.json', 'w') as f:
+	# 	json.dump(state_attributes, f)
 
-	timedb_file = pm.generate_timeseries_db(time_based_algorithm=True)
+	# pm = SequentialPatternMining(array, state_attributes)
 
-	subprocess.call('java -jar spmf.jar run Fournier08-Closed+time trials/timedb_test.txt output.txt 0.3 1 1 2 10',cwd='/media/milan/DATA/Qrera',shell=True)
-	# subprocess.call('java -jar spmf.jar run VGEN trials/timedb_test.txt output.txt 0.3 10 1 false',cwd='/media/milan/DATA/Qrera',shell=True)
+	# timedb_file = pm.generate_timeseries_db(time_based_algorithm=True)
+
+	# subprocess.call('java -jar spmf.jar run Fournier08-Closed+time trials/timedb_test.txt output.txt 0.3 1 1 2 10',cwd='/media/milan/DATA/Qrera',shell=True)
+	### subprocess.call('java -jar spmf.jar run VGEN trials/timedb_test.txt output.txt 0.3 10 1 false',cwd='/media/milan/DATA/Qrera',shell=True)
 	
-	get_freq_sequences(state_attributes, time_based_algorithm=True)
+
+	with open('state_attributes.json', 'r') as f:
+		state_attributes = json.load(f)
+	pattern = get_freq_sequences(state_attributes, time_based_algorithm=True)
