@@ -147,7 +147,7 @@ def peaks_to_discrete_states(final_peaks):
 
 	state_attributes = dict()
 	for s in states:
-		state_attributes.update({ s : (dpgmm.means_[s], dpgmm.covariances_[s])})
+		state_attributes.update({ str(s) : (dpgmm.means_[s][0], dpgmm.covariances_[s])}) # key should be string for json 
 	
 	print ('Number of states: ', len(np.unique(labels)), states)
 
