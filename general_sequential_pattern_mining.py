@@ -187,8 +187,98 @@ def get_freq_sequences(state_attributes, time_based_algorithm=True):
 
 
 
+
+
+class PatternRecognition:
+
+	def __init__(self, sequence, pattern, state_attributes):
+		self.sequence = list(sequence)
+		self.equence.insert(0,0)
+		self.pattern = list(pattern)
+		self.pattern.insert(0,0)
+		self.state_attributes = state_attributes
+		self.similarity_matrix = self.get_similarity_matrix()
+
+
+	def get_similarity_matrix(self):
+		S = len(self.state_attributes)
+		states = [s for s in state_attributes.keys()]
+
+		similarity_matrix = np.zeros((S,S))
+
+		for s in range(S):
+			for sn in range(S):
+				similarity_matrix[s][sn] = round(abs(state_attributes[states[s]][0] - state_attributes[states[sn]][0]))
+
+		similarity_matrix = -S*similarity_matrix//np.max(similarity_matrix)
+
+		for s in range(S):
+			similarity_matrix[s][s] =  S
+
+
+		print (similarity_matrix)
+		return similarity_matrix
+
+
+
+	def similarity_score(self,i,j):
+		return self.similarity_matrix[i][j]
+		
+
+
+	def gap_penalty(from_index, to_index, gap_length):
+
+		i_1 = from_index[0]
+		j_1 = from_index[1]
+
+		i = to_index[0]
+		j = to_index[1]
+
+		mean_vals = [val[0] for val in self.state_attributes.values()]
+		min_mean = min(mean_vals)
+		max_mean = max(max_vals)
+
+		if i_1  < i:
+
+			mean_i =  self.state_attributes[str(self.sequence[i])][0]
+
+			if (self.sequence[i_1] == self.sequence[i]) and (self.sequence[i_1] in self.pattern):
+				penalty = -1*gap_length
+
+			elif mean_i < max_mean and mean_i > min_mean:
+				penalty = -2*gap_length
+
+			else:
+				penalty = -S*gap_length
+
+		elif j_1 < j:
+			if sequence[i-1] == pattern[j-1] and sequence[i+1] == pattern[j+1]:
+				penalty = -1*gap_length
+
+			else:
+				penalty = -S*gap_length
+
+		return penalty
+
+
+
+	def local_alignment():
+		scoring_matrix = np.zeros((len(sequence), len(pattern), 3))  # 3 levels for score,i,j
+		for i in range(1,len(sequence)):
+			for j in range(1,len(pattern)):		
+				scoring_matrix[i][j][0] = max(scoring_matrix[i-1][j][0]+similarity_score(i,j),
+												scoring_matrix[i][j-1][0]+score,
+												scoring_matrix[i-1][j-1][0]+score, 0)
+				
+
+
+
+
+
+
+
 if __name__ == '__main__':
-	# array = [1, 2, 3, 3, 1, 2, 3, 5, 1, 2, 3, 1, 2, 3,5, 5, 5, 5, 1, 2, 2, 1, 2, 2, 3, 5, 1, 2, 3, 5, 5, 1, 1, 2, 2, 3, 3, 5, 1, 2, 3, 5]
+	array = [1, 2, 3, 3, 1, 2, 3, 5, 1, 2, 3, 1, 2, 3,5, 5, 5, 5, 1, 2, 2, 1, 2, 2, 3, 5, 1, 2, 3, 5, 5, 1, 1, 2, 2, 3, 3, 5, 1, 2, 3, 5]
 
 	# device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
 	# day = '2018_07_07'
@@ -210,4 +300,8 @@ if __name__ == '__main__':
 
 	with open('state_attributes.json', 'r') as f:
 		state_attributes = json.load(f)
-	pattern = get_freq_sequences(state_attributes, time_based_algorithm=True)
+	# pattern = get_freq_sequences(state_attributes, time_based_algorithm=True)
+
+	pattern = [1,2,3,5]
+
+	pattern_recognition(array, pattern, state_attributes)
