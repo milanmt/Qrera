@@ -2,15 +2,16 @@
 
 import os
 import time
+import fnmatch
 import jenkspy 
 import numpy as np
 import pandas as pd
-# import matplotlib.pyplot as plt
+from datetime import datetime
+import matplotlib.pyplot as plt
 from sklearn import linear_model
 from scipy.signal import argrelmax
 
-
-FILTER_WINDOW = 0 
+INTERVAL = str(5) # Minutes
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -25,6 +26,78 @@ def timing_wrapper(func):
 
 	return wrapper
 
+def var_round(number):
+	number = float(number)
+	
+	if number/10 <= 10:
+		return round(number)
+	elif number/10 <= 1000:
+		return round(number, -1)
+	else:
+		return round(number, -2)
+
+def get_data_files(path, day):
+	pattern = "*_*_*"	
+	files = []
+	got_file = False
+	for root, dirs, fs in os.walk(path):
+		if fs and got_file == False:
+			for f in fs:
+				if fnmatch.fnmatch(f,pattern):
+					files.append(os.path.join(root,f))
+				if day in f:
+					got_file = True
+					break
+	return files
+
+def get_full_data(files):
+    values =[]
+    for file in files:
+        df2 = pd.read_csv(file)
+        try:
+            df2 = df2.rename(columns={"POWER":"VALUE"})
+        except:
+            pass
+       	df2 = df2.filter(items=["VALUE"])
+        df2 = df2.loc[df2["VALUE"]>0]
+        values.extend(df2["VALUE"])
+    return values
+
+
+    file_name = (datetime.strptime(date,"%Y-%m-%d").strftime("%Y_%m_%d")) + ".csv.gz"
+    pattern = "*_*_*"
+    files = []
+    for root, dirs, fs in os.walk(path):
+        if fs:
+            for f in fs:
+                if fnmatch.fnmatch(f, pattern):
+                    if(f <=  file_name):
+                        files.append(os.path.join(root,f))
+                    else:
+                        break
+    return files
+
+def get_resampled_data(files):
+    interval = INTERVAL + "T"
+    values =[]
+    for file in files:
+        df2 = pd.read_csv(file)
+        try:
+            df2 = df2.rename(columns={"POWER":"VALUE"})
+        except:
+            pass
+       
+        # ========= Resampling ===========
+        df2.index = pd.to_datetime(df2["TS"])
+        df2 = df2.resample(interval).mean()
+        df2 = df2.reset_index()
+        df2 = df2.fillna(0)
+        #=================================
+        df2['VALUE'] = df2['VALUE'].apply(lambda x : var_round(x))
+        df2 = df2.filter(items=["VALUE"])
+        df2 = df2.loc[df2["VALUE"]>0]
+        values.extend(df2["VALUE"])
+    return values
 
 @timing_wrapper
 def get_otsus_threshold(power):
@@ -52,8 +125,6 @@ def get_otsus_threshold(power):
 			max_sigma = sigma
 			threshold = power_val[i]
 
-	print (threshold)
-
 	return threshold
 
 @timing_wrapper
@@ -61,83 +132,29 @@ def get_jenks_threshold(power, no_thresholds_required):
 	print ('Calculating threshold...')
 	return jenkspy.jenks_breaks(power, nb_class=int(no_thresholds_required)+1)[1:-1]
 
-
-def var_round(number):
-	number = float(number)
-	
-	if number/10 <= 10:
-		return round(number)
-	elif number/10 <= 1000:
-		return round(number, -1)
-	else:
-		return round(number, -2)
-
-def filter_data(pt_dataframe):
-	try:
-		power = pt_dataframe['POWER']
-	except KeyError:
-		power = pt_dataframe['VALUE']
+def filter_data(power_sig):
 
 	if FILTER_WINDOW == 0:
 		## Simple rounding
-		power_rounded = [var_round(p) for p in power]
+		power_rounded = [var_round(p) for p in power_sig]
 		return power_rounded
 	
-	# ## Smoothing Filter 
-	# time = pt_dataframe['TS']
-	# power_smoothed= []
-
-	# #### Modified code for smoothing filter should be in here 
-
-	#### This is old incorrect code    
-	# power_smoothed = [var_round(sum(power_sig[i:i+FILTER_WINDOW])/FILTER_WINDOW)
-	# for i in range(0,power_sig.shape[0],FILTER_WINDOW)]
-	# if not power_smoothed:
-	# 	return [0]
-	# else:
-	# 	return power_smoothed
-
-
+	## Smoothing Filter 
+	power_smoothed = [var_round(sum(power_sig[i:i+FILTER_WINDOW])/FILTER_WINDOW) 
+	for i in range(0,power_sig.shape[0],FILTER_WINDOW)]
+	if not power_smoothed:
+		return [0]
+	else:
+		return power_smoothed
 
 @timing_wrapper
 def process_data(path_to_device, day):
 	#### Change depending on where data is available 
 	#### Accesses complete data available or till date specified, from location provided
 	print ('Processing files...')
-	power_f = []
-	power = []
-	got_file = False
-	for root, dirs, fs in os.walk(path_to_device):
-		if got_file:
-			break
-		if fs:
-			for file in fs:
-				if file.endswith('.csv.gz'):
-					filename = os.path.join(root, file)
-					pd_entries = pd.read_csv(filename, engine="python")
-					# pd_entries.sort_values(by='TS')
-					# pd_entries['TS'] = pd_entries['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
-					power_sig = filter_data(pd_entries)
-					try:
-						power.extend(pd_entries['POWER'])
-					except KeyError:
-						power.extend(pd_entries['VALUE'])
-
-					if not all(p == 0 for p in power_sig):
-						power_f.extend(power_sig)
-
-					if day in file:
-						print (file)
-						got_file = True
-						break
-			
-	if not power_f:
-		print ('Cannot Access Files')
-		raise IOError
-
-	print(len(power_f))
-	print(len(power))
-
+	files = get_data_files(path_to_device, day)
+	power = get_full_data(files)
+	power_f = get_resampled_data(files)
 	return pd.Series(power_f), pd.Series(power)
 
 @timing_wrapper
@@ -200,7 +217,7 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 	if no_thresholds_required == 1:
 		threshold = var_round(get_otsus_threshold(power_f))
 		# threshold = var_round(get_jenks_threshold(power_f, 1)[0])
-		print (threshold, 'overall threshold')
+		print (threshold, 'Overall Threshold')
 	else:
 		threshold = get_jenks_threshold(power_f, no_thresholds_required)
 
@@ -208,14 +225,13 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 
 		p_th_ov = power[power <= threshold]
 		amount_under_th = round(p_th_ov.shape[0]/power.shape[0],1)
-		print (p_th_ov.shape[0]/power.shape[0])
+		# print (p_th_ov.shape[0]/power.shape[0])
 
 		if amount_under_th >= 0.5:
 			threshold = fit_line(power, threshold, p_th_ov, amount_under_th)
 
-	print (threshold)
+	print ('Final Threshold', threshold)
 	return threshold
-
 
 if __name__ == '__main__':
 
