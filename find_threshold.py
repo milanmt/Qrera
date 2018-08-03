@@ -10,7 +10,7 @@ from sklearn import linear_model
 from scipy.signal import argrelmax
 
 
-FILTER_WINDOW = 30 
+FILTER_WINDOW = 0 
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -72,20 +72,30 @@ def var_round(number):
 	else:
 		return round(number, -2)
 
-def filter_data(power_sig):
+def filter_data(pt_dataframe):
+	try:
+		power = pt_dataframe['POWER']
+	except KeyError:
+		power = pt_dataframe['VALUE']
 
 	if FILTER_WINDOW == 0:
 		## Simple rounding
-		power_rounded = [var_round(p) for p in power_sig]
+		power_rounded = [var_round(p) for p in power]
 		return power_rounded
 	
-	## Smoothing Filter 
-	power_smoothed = [var_round(sum(power_sig[i:i+FILTER_WINDOW])/FILTER_WINDOW) 
-	for i in range(0,power_sig.shape[0],FILTER_WINDOW)]
-	if not power_smoothed:
-		return [0]
-	else:
-		return power_smoothed
+	# ## Smoothing Filter 
+	# time = pt_dataframe['TS']
+	# power_smoothed= []
+
+	# #### Modified code for smoothing filter should be in here 
+
+	#### This is old incorrect code    
+	# power_smoothed = [var_round(sum(power_sig[i:i+FILTER_WINDOW])/FILTER_WINDOW)
+	# for i in range(0,power_sig.shape[0],FILTER_WINDOW)]
+	# if not power_smoothed:
+	# 	return [0]
+	# else:
+	# 	return power_smoothed
 
 
 
@@ -105,11 +115,12 @@ def process_data(path_to_device, day):
 				if file.endswith('.csv.gz'):
 					filename = os.path.join(root, file)
 					pd_entries = pd.read_csv(filename, engine="python")
+					# pd_entries.sort_values(by='TS')
+					# pd_entries['TS'] = pd_entries['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
+					power_sig = filter_data(pd_entries)
 					try:
-						power_sig = filter_data(pd_entries['POWER'])
 						power.extend(pd_entries['POWER'])
 					except KeyError:
-						power_sig = filter_data(pd_entries['VALUE'])
 						power.extend(pd_entries['VALUE'])
 
 					if not all(p == 0 for p in power_sig):
@@ -210,4 +221,4 @@ if __name__ == '__main__':
 
 	#### Change depending on where data is available 
 	#### Accesses complete data available, or till date specified from location provided
-	th = threshold_of_device('/media/milan/DATA/Qrera/AutoAcc', 1, '2018_07_02')
+	th = threshold_of_device('/media/milan/DATA/Qrera/Aureate/043017', 1, '2018_07_02')
