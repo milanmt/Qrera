@@ -12,6 +12,8 @@ from sklearn import linear_model
 from scipy.signal import argrelmax
 
 INTERVAL = str(5) # Minutes
+MAX_VAL_A_SCALING = 500 # Maximum value possible after scaling, to speed up otsus.
+                        # scaling only coded in for otsus
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -100,8 +102,15 @@ def get_resampled_data(files):
     return values
 
 @timing_wrapper
-def get_otsus_threshold(power):
+def get_otsus_threshold(power, scaling=False):
 	print ('Calculating threshold...')
+
+	max_power = max(power)
+	if scaling == True:
+		power_a = np.array(power)
+		power_a = power/max_power*MAX_VAL_A_SCALING
+		power = [ round(p) for p in power_a]
+
 	power_val, power_count = np.unique(power, return_counts=True)
 	prob = power_count/float(np.sum(power_count))
 
@@ -125,7 +134,10 @@ def get_otsus_threshold(power):
 			max_sigma = sigma
 			threshold = power_val[i]
 
-	return threshold
+	if scaling== True:
+		return threshold*max_power/MAX_VAL_A_SCALING
+	else:
+		return threshold
 
 @timing_wrapper
 def get_jenks_threshold(power, no_thresholds_required):
@@ -215,7 +227,7 @@ def threshold_of_device(path_to_device, no_thresholds_required, day):
 	power_f, power = process_data(path_to_device, day)
 
 	if no_thresholds_required == 1:
-		threshold = var_round(get_otsus_threshold(power_f))
+		threshold = var_round(get_otsus_threshold(power_f, scaling=True))
 		# threshold = var_round(get_jenks_threshold(power_f, 1)[0])
 		print (threshold, 'Overall Threshold')
 	else:
