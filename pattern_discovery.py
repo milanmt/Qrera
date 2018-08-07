@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import subprocess
 import pandas 
+import json
 import math
 import os
 
@@ -23,22 +24,24 @@ class SequentialPatternMining:
 		self.pattern_filename = 'output.txt'
 		self.path_to_spmf = '/media/milan/DATA/Qrera'
 		self.time_based_algorithm = time_based_algorithm
+		self.similarity_constraint = 1  ## No single element can appear more than 100x% of the time.
 
 	
 	def get_diff_matrix(self):
 		S = len(self.states)
 		diff_matrix = np.zeros((S,S))
 		for s in range(S):
-			for sn in range(S):
+			for sn in range(s,S):
 				diff_matrix[s][sn] = abs(self.state_attributes[self.states[s]][0] - 
 					self.state_attributes[self.states[sn]][0])
+				if sn != s:
+					diff_matrix[sn][s] = diff_matrix[s][sn]
 
-		diff_matrix = S*diff_matrix/np.max(diff_matrix)
+		diff_matrix = (S*diff_matrix)//np.max(diff_matrix)+1
 		for s in range(S):
-			for sn in range(S):
-				diff_matrix[s][sn] = round(diff_matrix[s][sn])
-
+			diff_matrix[s][s] = 0
 		print (diff_matrix)	
+		return diff_matrix
 
 	
 	def levenshtein_distance(self,a,b):
@@ -47,11 +50,25 @@ class SequentialPatternMining:
 		b.insert(0,0)
 		for i in range(len(a)):
 			for j in range(len(b)):
-				score = self.diff_matrix[self.states.index(a[i])][self.states.index(b[j])]
-				if i == 0 or j == 0:
-					lev_m[i][j] = 0
+				### getting scores
+				score = self.diff_matrix[self.states.index(str(a[i]))][self.states.index(str(b[j]))]
+				if a[i] in b:
+					score_ins_a = 1 
 				else:
-					lev_m[i][j] = score + min(lev_m[i-1][j], lev_m[i][j-1], lev_m[i-1][j-1])
+					score_ins_a = score+1
+				if b[j] in a:
+					score_ins_b = 1
+				else:
+					score_ins_b = score+1
+				### forming matrix
+				if i == 0 and j == 0:
+					lev_m[i][j] = 0
+				elif i == 0:
+					lev_m[i][j] = lev_m[i][j-1]+score_ins_b
+				elif j == 0:
+					lev_m[i][j] = lev_m[i-1][j]+score_ins_a
+				else:
+					lev_m[i][j] = min(lev_m[i-1][j]+score_ins_a, lev_m[i][j-1]+score_ins_b, lev_m[i-1][j-1]+score)
 		return lev_m[len(a)-1][len(b)-1]
 
 
@@ -73,14 +90,18 @@ class SequentialPatternMining:
 
 	def __pattern_mining(self):
 		self.__generate_timeseries_db()	
-		## Closed Patterns
-		# subprocess.call('java -jar spmf.jar run Fournier08-Closed+time '+
-		# 	+self.db_filename+' '+self.pattern_filename+' '+str(self.MIN_SUPPORT)+' 1 1 '+
-		# 	str(self.MIN_LEN)+' '+str(self.MAX_LEN),cwd=self.path_to_spmf,shell=True)	
-		## Generative patterns
-		subprocess.call('java -jar spmf.jar run VGEN '+self.db_filename+
+		if self.time_based_algorithm == True:
+		## Mining Closed Patterns
+			subprocess.call('java -jar spmf.jar run Fournier08-Closed+time '+self.db_filename
+			+' '+self.pattern_filename+' '+str(self.MIN_SUPPORT)+' 1 1 '+
+			str(self.MIN_LEN)+' '+str(self.MAX_LEN),cwd=self.path_to_spmf,shell=True)
+
+		else:
+		## Mining Generative Patterns
+			subprocess.call(('java -jar spmf.jar run VGEN '+self.db_filename+
 			' '+self.pattern_filename+' '+str(self.MIN_SUPPORT)+' '+
-			str(self.MAX_LEN)+' 1 false',cwd=self.path_to_spmf,shell=True)
+			str(self.MAX_LEN)+' 1 false'),cwd=self.path_to_spmf,shell=True)
+		
 		self.pattern_filename = os.path.join(self.path_to_spmf, self.pattern_filename)
 
 
@@ -101,30 +122,51 @@ class SequentialPatternMining:
 					seq_support.append((seq, support))
 			else:
 				for line in f:
-					temp_l = line.split(' -1 ')
-					seq = []
-					support = 0 
-					for s in temp_l:
-						if '#SUP' in s:
-							support = int(s.split(':')[1].strip())
-						else:
-							seq.append(int(s))
-					seq_support.append((seq, support))
+					if '-1' in line:
+						temp_l = line.split(' -1 ')
+						seq = []
+						support = 0 
+						for s in temp_l:
+							if '#SUP' in s:
+								support = int(s.split(':')[1].strip())
+							else:
+								seq.append(int(s))
+						# if len(seq) > 1:
+						seq_support.append((seq, support))
 		return seq_support
 
 
 	def discover_pattern(self):
 		seq_support = self.__get_all_freq_seq()
 		print (len(seq_support),'-> ALL')
+		print (seq_support)
+		# max_subseq = [el[0] for el in seq_support if len(el[0]) > 1]
 		seq_f = []
 		for seq, support in seq_support:
-			s_val, s_count = np.unique(seq, return_counts=False)
+			s_val, s_count = np.unique(seq, return_counts=True)
 			s_count = s_count/sum(s_count)
-			if all(c < 0.5 for c in s_count):   ## Making sure no value takes 
+			if all(c < self.similarity_constraint for c in s_count):    
 				seq_f.append(seq)
 
 		print (len(seq_f), '-> Filtered')
 		print (seq_f)
+
+		p_dist = np.zeros((len(seq_f), len(seq_f)))
+		for i in range(len(seq_f)):
+			for j in range(i,len(seq_f)):
+				a = list(seq_f[i])
+				b = list(seq_f[j])
+				p_dist[i][j] = self.levenshtein_distance(a,b)
+				if i != j:
+					p_dist[j][i] = p_dist[i][j]
+		p_dist = p_dist/np.max(p_dist)
+		p_dist = 1 - p_dist
+
+		ap = AffinityPropagation(affinity='precomputed')
+		ap.fit(p_dist)
+		final_subseqs = [ seq_f[ind] for ind in ap.cluster_centers_indices_]
+	
+		print(final_subseqs)
 
 
 
@@ -189,7 +231,14 @@ def get_freq_sequences(state_attributes, time_based_algorithm=True):
 
 
 def test_main():
-	return ('Test')
+
+	with open('state_attributes.json', 'r') as f:
+		state_attributes = json.load(f)
+
+	spm = SequentialPatternMining([1,2], state_attributes)
+	spm.discover_pattern()
+
+
 if __name__ == '__main__':
 	test_main()
 
