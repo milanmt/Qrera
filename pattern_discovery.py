@@ -250,7 +250,7 @@ class SequentialPatternMining:
 					if len(seq[0]) < min_len:
 						min_len = len(seq[0])
 						add_pattern = seq[0]
-			selected_pattern.extend(add_pattern)
+			selected_pattern.extend(add_pattern[1:])
 			final_pattern = selected_pattern
 		else:
 			final_pattern = selected_pattern
@@ -259,6 +259,7 @@ class SequentialPatternMining:
 
 		return final_pattern
 
+###### Add extending pattern for case where generator pattern cannot fit into any other pattern.
 
 
 
