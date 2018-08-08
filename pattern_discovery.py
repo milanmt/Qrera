@@ -15,7 +15,7 @@ class SequentialPatternMining:
 		self.MAX_LEN = 10
 		self.MIN_LEN = 2
 		self.MIN_SUPPORT = 0.3
-		self.N_SEGMENTS = 24
+		self.N_SEGMENTS = 48
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
 		self.state_attributes = state_attributes
 		self.states = [s for s in self.state_attributes.keys()]
@@ -48,26 +48,27 @@ class SequentialPatternMining:
 		lev_m = np.zeros((len(a)+1,len(b)+1))
 		a.insert(0,0)
 		b.insert(0,0)
+		max_score = np.max(self.diff_matrix)+1
 		for i in range(len(a)):
 			for j in range(len(b)):
-				### getting scores
-				score = self.diff_matrix[self.states.index(str(a[i]))][self.states.index(str(b[j]))]
-				if a[i] in b:
-					score_ins_a = 1 
-				else:
-					score_ins_a = score+1
-				if b[j] in a:
-					score_ins_b = 1
-				else:
-					score_ins_b = score+1
 				### forming matrix
 				if i == 0 and j == 0:
 					lev_m[i][j] = 0
 				elif i == 0:
-					lev_m[i][j] = lev_m[i][j-1]+score_ins_b
+					lev_m[i][j] = lev_m[i][j-1]+max_score
 				elif j == 0:
-					lev_m[i][j] = lev_m[i-1][j]+score_ins_a
+					lev_m[i][j] = lev_m[i-1][j]+max_score
 				else:
+					### getting scores
+					score = self.diff_matrix[self.states.index(str(a[i]))][self.states.index(str(b[j]))]
+					if a[i] in b:
+						score_ins_a = 1 
+					else:
+						score_ins_a = score+1
+					if b[j] in a:
+						score_ins_b = 1
+					else:
+						score_ins_b = score+1
 					lev_m[i][j] = min(lev_m[i-1][j]+score_ins_a, lev_m[i][j-1]+score_ins_b, lev_m[i-1][j-1]+score)
 		return lev_m[len(a)-1][len(b)-1]
 
@@ -140,22 +141,24 @@ class SequentialPatternMining:
 		seq_support = self.__get_all_freq_seq()
 		print (len(seq_support),'-> ALL')
 		print (seq_support)
-		# max_subseq = [el[0] for el in seq_support if len(el[0]) > 1]
+
+		### Filtering off patterns according to req criterion (amount of similarity tolerated)		
 		seq_f = []
 		for seq, support in seq_support:
 			s_val, s_count = np.unique(seq, return_counts=True)
 			s_count = s_count/sum(s_count)
-			if all(c < self.similarity_constraint for c in s_count):    
-				seq_f.append(seq)
+			if all(c < self.similarity_constraint for c in s_count):   
+				seq_f.append((seq,support))
 
 		print (len(seq_f), '-> Filtered')
 		print (seq_f)
 
+		### Clustering filtered sequences using affinity propagation
 		p_dist = np.zeros((len(seq_f), len(seq_f)))
 		for i in range(len(seq_f)):
 			for j in range(i,len(seq_f)):
-				a = list(seq_f[i])
-				b = list(seq_f[j])
+				a = list(seq_f[i][0])
+				b = list(seq_f[j][0])
 				p_dist[i][j] = self.levenshtein_distance(a,b)
 				if i != j:
 					p_dist[j][i] = p_dist[i][j]
@@ -164,10 +167,115 @@ class SequentialPatternMining:
 
 		ap = AffinityPropagation(affinity='precomputed')
 		ap.fit(p_dist)
-		final_subseqs = [ seq_f[ind] for ind in ap.cluster_centers_indices_]
+		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
+		subseq_labels = ap.labels_
 	
-		print(final_subseqs)
+		print(cluster_subseqs_exs)
 
+		### Arranging sequences by cluster label -> mostly for future use
+		cluster_subseqs = dict()
+		for seq, label in zip(seq_f,subseq_labels):
+			if label not in cluster_subseqs:
+				cluster_subseqs.update({label : [seq]})
+			else:
+				seq_list = cluster_subseqs[label]
+				seq_list.append(seq)
+				cluster_subseqs.update({ label: seq_list})
+
+		print (cluster_subseqs)
+
+		### Finding max variance among clusters to get initial pattern
+		cluster_variances = []
+		for seq in cluster_subseqs_exs:
+			var = np.std([self.state_attributes[str(s)][0] for s in seq])
+			cluster_variances.append(var)
+
+		print (cluster_variances)
+		
+		max_var_ind = cluster_variances.index(max(cluster_variances))
+
+		### Finding pattern with maximum support in the highest variance cluster
+		max_support = 0
+		max_pattern = None
+		for subseq in cluster_subseqs[max_var_ind]:
+			print (subseq)
+			if subseq[1] > max_support:
+				max_support = subseq[1]
+				max_pattern = subseq[0]
+
+		print (max_pattern)
+
+		### Finding the patterns that include the generator pattern
+		probable_list = []
+		for seq_list in cluster_subseqs.values():
+			for seq in seq_list:
+				if seq_contains(seq[0], max_pattern) and seq[0] != max_pattern:
+					probable_list.append(seq[0])
+
+		print (probable_list)
+
+		### Selecting pattern of the maxlength of the probable list
+		max_len = 0
+		for seq in probable_list:
+			if max_len <= len(seq):
+				max_len = len(seq)
+
+		req_pattern = []
+		for seq in probable_list:
+			if max_len == len(seq):
+				req_pattern.append(seq)
+
+		print (req_pattern)
+
+		### If more than one pattern is selected from above, 
+		selected_pattern = None
+		if len(req_pattern) > 1:
+			var_pattern = []
+			for p in req_pattern:
+				var = np.std([self.state_attributes[str(s)][0] for s in p])
+				var_pattern.append(var)
+
+			max_ind = var_pattern.index(max(var_pattern))
+			selected_pattern = req_pattern[max_ind]
+		else:
+			selected_pattern = req_pattern[0]
+
+		print (selected_pattern)
+
+		final_pattern = None
+		min_len = np.inf
+		if selected_pattern[0] != selected_pattern[-1]:
+			for seq in seq_f:
+				if seq[0][0] == selected_pattern[-1] and seq[0][-1] == selected_pattern[0]:
+					if len(seq[0]) < min_len:
+						min_len = len(seq[0])
+						add_pattern = seq[0]
+			selected_pattern.extend(add_pattern)
+			final_pattern = selected_pattern
+		else:
+			final_pattern = selected_pattern
+
+		print (final_pattern)
+
+		return final_pattern
+
+
+
+
+
+def seq_contains(seq, subseq):
+	seq_s = str()
+	for x in seq:
+		seq_s = seq_s + str(x)
+
+	subseq_s = str()
+	for x in subseq:
+		subseq_s = subseq_s + str(x)
+
+	if subseq_s in seq_s:
+		return True
+	else:
+		return False 
 
 
 
