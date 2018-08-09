@@ -11,7 +11,10 @@ import os
 
 
 class SequentialPatternMining:
-	def __init__(self, sequence, state_attributes, time_based_algorithm=True):
+	def __init__(self, sequence, state_attributes, time_based_algorithm=False):
+		### After testing, patterns discovered by generative patterns is more suitable to our needs.
+		### So keep time_based_algorithm as False. If true, closed patterns will be detected. 
+		### The current filtering method is not guaranteed to work on closed patterns with stability.
 		self.MAX_LEN = 10
 		self.MIN_LEN = 2
 		self.MIN_SUPPORT = 0.3
@@ -132,15 +135,14 @@ class SequentialPatternMining:
 								support = int(s.split(':')[1].strip())
 							else:
 								seq.append(int(s))
-						# if len(seq) > 1:
 						seq_support.append((seq, support))
 		return seq_support
 
 
 	def discover_pattern(self):
 		seq_support = self.__get_all_freq_seq()
-		print (len(seq_support),'-> ALL')
-		print (seq_support)
+		# print (len(seq_support),'-> ALL')
+		# print (seq_support)
 
 		### Filtering off patterns according to req criterion (amount of similarity tolerated)		
 		seq_f = []
