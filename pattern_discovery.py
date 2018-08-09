@@ -214,53 +214,68 @@ class SequentialPatternMining:
 
 		print (probable_list)
 
-		### Selecting pattern of the maxlength of the probable list
-		max_len = 0
-		for seq in probable_list:
-			if max_len <= len(seq):
-				max_len = len(seq)
+		if probable_list:
+			### Selecting pattern of the maxlength of the probable list
+			max_len = 0
+			for seq in probable_list:
+				if max_len <= len(seq):
+					max_len = len(seq)
 
-		req_pattern = []
-		for seq in probable_list:
-			if max_len == len(seq):
-				req_pattern.append(seq)
+			req_pattern = []
+			for seq in probable_list:
+				if max_len == len(seq):
+					req_pattern.append(seq)
 
-		print (req_pattern)
+			print (req_pattern)
 
-		### If more than one pattern is selected from above, 
-		selected_pattern = None
-		if len(req_pattern) > 1:
-			var_pattern = []
-			for p in req_pattern:
-				var = np.std([self.state_attributes[str(s)][0] for s in p])
-				var_pattern.append(var)
+			### If more than one pattern is selected from above, select the pattern with higher variance
+			selected_pattern = None
+			if len(req_pattern) > 1:
+				var_pattern = []
+				for p in req_pattern:
+					var = np.std([self.state_attributes[str(s)][0] for s in p])
+					var_pattern.append(var)
 
-			max_ind = var_pattern.index(max(var_pattern))
-			selected_pattern = req_pattern[max_ind]
+				max_ind = var_pattern.index(max(var_pattern))
+				selected_pattern = req_pattern[max_ind]
+			else:
+				selected_pattern = req_pattern[0]
+
+			print (selected_pattern)
+
+
+			### If pattern does not end and stop with the same state, append next possible sequence.
+			final_pattern = None
+			min_len = np.inf
+			if selected_pattern[0] != selected_pattern[-1]:
+				for seq in seq_f:
+					if seq[0][0] == selected_pattern[-1] and seq[0][-1] == selected_pattern[0]:
+						if len(seq[0]) < min_len:
+							min_len = len(seq[0])
+							add_pattern = seq[0]
+				selected_pattern.extend(add_pattern[1:])
+				final_pattern = selected_pattern
+			else:
+				final_pattern = selected_pattern
+
+			print (final_pattern)
+
+
 		else:
-			selected_pattern = req_pattern[0]
-
-		print (selected_pattern)
-
-		final_pattern = None
-		min_len = np.inf
-		if selected_pattern[0] != selected_pattern[-1]:
+			final_pattern = None
+			min_len = np.inf
 			for seq in seq_f:
-				if seq[0][0] == selected_pattern[-1] and seq[0][-1] == selected_pattern[0]:
+				if seq[0][0] == max_pattern[-1] and seq[0][-1] == max_pattern[0]:
 					if len(seq[0]) < min_len:
-						min_len = len(seq[0])
-						add_pattern = seq[0]
-			selected_pattern.extend(add_pattern[1:])
-			final_pattern = selected_pattern
-		else:
-			final_pattern = selected_pattern
+							min_len = len(seq[0])
+							add_pattern = seq[0]
+			max_pattern.extend(add_pattern[1:])
+			final_pattern = max_pattern
+			
+			print (final_pattern)
 
-		print (final_pattern)
 
 		return final_pattern
-
-###### Add extending pattern for case where generator pattern cannot fit into any other pattern.
-
 
 
 
@@ -277,67 +292,6 @@ def seq_contains(seq, subseq):
 		return True
 	else:
 		return False 
-
-
-
-def get_freq_sequences(state_attributes, time_based_algorithm=True):
-	
-	seq_support_f = []
-	for seq, support in seq_support:
-		if len(seq) > 1:
-			if np.std(seq) != 0 and seq[0] == seq[-1]:
-				seq_support_f.append((seq, support))
-
-	max_subseq = []
-	max_count = max(x[1] for x in seq_support_f)
-
-	for subseq, count in seq_support_f:
-		if max_count == count:
-			max_subseq.append(subseq)
-
-
-	print (max_subseq)
-
-	if len(max_subseq) < 2:
-		max_count2 = max(x[1] for x in seq_support_f if x[1] != max_count)
-		for subseq, count in seq_support_f:
-			if max_count2 == count:
-				max_subseq.append(subseq)
-
-	print (max_subseq)
-
-	p_dist = np.zeros((len(max_subseq), len(max_subseq)))
-	for i in range(len(max_subseq)):
-		for j in range(len(max_subseq)):
-			a = list(max_subseq[i])
-			b = list(max_subseq[j])
-			p_dist[i][j] = levenshtein_distance(a,b)
-	p_dist = p_dist/np.max(p_dist)
-	p_dist = 1 - p_dist
-
-	ap = AffinityPropagation(affinity='precomputed')
-	ap.fit(p_dist)
-	final_subseqs = [ max_subseq[ind] for ind in ap.cluster_centers_indices_]
-	
-	print(final_subseqs)
-
-	final_variances = []
-	for seq in final_subseqs:
-		var = 0
-		for s in seq:
-			var = var + state_attributes[str(s)][1]
-		final_variances.append(var)
-
-	print (final_variances)
-
-	max_var_ind = final_variances.index(max(final_variances))
-	selected_pattern = final_subseqs[max_var_ind]
-
-	print (selected_pattern)
-
-	return selected_pattern
-
-
 
 def test_main():
 
