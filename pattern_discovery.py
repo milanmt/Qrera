@@ -139,23 +139,62 @@ class SequentialPatternMining:
 		return seq_support
 
 
+	def __get_max_var_ind(self, list_seq):
+		cluster_variances = []
+		for seq in list_seq:
+			var = np.std([self.state_attributes[str(s)][0] for s in seq])
+			cluster_variances.append(var)
+		max_var_ind = cluster_variances.index(max(cluster_variances))
+		return max_var_ind
+
+
+	def __get_maximal_patterns(self, seq_support):
+		maximal_patterns = []
+		for seq in seq_support:
+			for seql in seq_support:
+				if seq_contains(seql[0], seq[0]) and seql[0] != seq[0]:
+					if seql not in maximal_patterns:
+						maximal_patterns.append(seql)
+					if seq in maximal_patterns:
+						ind = maximal_patterns.index(seq)
+						del maximal_patterns[ind]
+		return maximal_patterns
+
+	
 	def discover_pattern(self):
 		seq_support = self.__get_all_freq_seq()
-		# print (len(seq_support),'-> ALL')
-		# print (seq_support)
+		seq_support_m = self.__get_maximal_patterns(seq_support)
 
-		### Filtering off patterns according to req criterion (amount of similarity tolerated)		
-		seq_f = []
-		for seq, support in seq_support:
-			s_val, s_count = np.unique(seq, return_counts=True)
-			s_count = s_count/sum(s_count)
-			if all(c < self.similarity_constraint for c in s_count):   
-				seq_f.append((seq,support))
+		possible_patterns = []
+		for seq,support in seq_support_m:
+			if seq[0] == seq[-1]:
+				possible_patterns.append(seq)
 
-		print (len(seq_f), '-> Filtered')
-		print (seq_f)
+		### Finding max variance among patterns that start and end the same state
+		if possible_patterns:
+			max_var_ind = self.__get_max_var_ind(possible_patterns) 
+			final_pattern = possible_patterns[max_var_ind] 
+		else:
+			## If no such pattern exists, extend patterns that gives likely output
+			print ('Case when pattern not found directly')
+			max_var_ind = self.__get_max_var_ind([seq[0] for seq in seq_support_m])
+			max_var_pattern = seq_support_m[max_var_ind][0] 
+			min_len = np.inf
+			for seq in seq_support_m:
+				if seq[0][0] == max_var_pattern[-1] and seq[0][-1] == max_var_pattern[0]:
+					if len(seq[0]) < min_len:
+							min_len = len(seq[0])
+							add_pattern = seq[0]
+			max_var_pattern.extend(add_pattern[1:])
+			final_pattern = max_var_pattern
+		print (final_pattern)
 
-		### Clustering filtered sequences using affinity propagation
+
+	def cluster_patterns(self):
+		seq_support = self.__get_all_freq_seq()
+		seq_f =  self.__get_maximal_patterns(seq_support)	
+
+		### Clustering maximal sequences using affinity propagation
 		p_dist = np.zeros((len(seq_f), len(seq_f)))
 		for i in range(len(seq_f)):
 			for j in range(i,len(seq_f)):
@@ -186,100 +225,7 @@ class SequentialPatternMining:
 
 		print (cluster_subseqs)
 
-		### Finding max variance among clusters to get initial pattern
-		cluster_variances = []
-		for seq in cluster_subseqs_exs:
-			var = np.std([self.state_attributes[str(s)][0] for s in seq])
-			cluster_variances.append(var)
-
-		print (cluster_variances)
-		
-		max_var_ind = cluster_variances.index(max(cluster_variances))
-
-		### Finding pattern with maximum support in the highest variance cluster
-		max_support = 0
-		max_pattern = None
-		for subseq in cluster_subseqs[max_var_ind]:
-			print (subseq)
-			if subseq[1] > max_support:
-				max_support = subseq[1]
-				max_pattern = subseq[0]
-
-		print (max_pattern)
-
-		### Finding the patterns that include the generator pattern
-		probable_list = []
-		for seq_list in cluster_subseqs.values():
-			for seq in seq_list:
-				if seq_contains(seq[0], max_pattern) and seq[0] != max_pattern:
-					probable_list.append(seq[0])
-
-		print (probable_list)
-
-		if probable_list:
-			### Selecting pattern of the maxlength of the probable list
-			max_len = 0
-			for seq in probable_list:
-				if max_len <= len(seq):
-					max_len = len(seq)
-
-			req_pattern = []
-			for seq in probable_list:
-				if max_len == len(seq):
-					req_pattern.append(seq)
-
-			print (req_pattern)
-
-			### If more than one pattern is selected from above, select the pattern with higher variance
-			selected_pattern = None
-			if len(req_pattern) > 1:
-				var_pattern = []
-				for p in req_pattern:
-					var = np.std([self.state_attributes[str(s)][0] for s in p])
-					var_pattern.append(var)
-
-				max_ind = var_pattern.index(max(var_pattern))
-				selected_pattern = req_pattern[max_ind]
-			else:
-				selected_pattern = req_pattern[0]
-
-			print (selected_pattern)
-
-
-			### If pattern does not end and stop with the same state, append next possible sequence.
-			final_pattern = None
-			min_len = np.inf
-			if selected_pattern[0] != selected_pattern[-1]:
-				for seq in seq_f:
-					if seq[0][0] == selected_pattern[-1] and seq[0][-1] == selected_pattern[0]:
-						if len(seq[0]) < min_len:
-							min_len = len(seq[0])
-							add_pattern = seq[0]
-				selected_pattern.extend(add_pattern[1:])
-				final_pattern = selected_pattern
-			else:
-				final_pattern = selected_pattern
-
-			print (final_pattern)
-
-
-		else:
-			final_pattern = None
-			min_len = np.inf
-			for seq in seq_f:
-				if seq[0][0] == max_pattern[-1] and seq[0][-1] == max_pattern[0]:
-					if len(seq[0]) < min_len:
-							min_len = len(seq[0])
-							add_pattern = seq[0]
-			max_pattern.extend(add_pattern[1:])
-			final_pattern = max_pattern
-			
-			print (final_pattern)
-
-
-		return final_pattern
-
-
+		return cluster_subseqs
 
 def seq_contains(seq, subseq):
 	seq_s = str()
@@ -294,18 +240,3 @@ def seq_contains(seq, subseq):
 		return True
 	else:
 		return False 
-
-def test_main():
-
-	with open('state_attributes.json', 'r') as f:
-		state_attributes = json.load(f)
-
-	spm = SequentialPatternMining([1,2], state_attributes)
-	spm.discover_pattern()
-
-
-if __name__ == '__main__':
-	test_main()
-
-
-
