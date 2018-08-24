@@ -43,7 +43,7 @@ class SequentialPatternMining:
 		diff_matrix = (S*diff_matrix)//np.max(diff_matrix)+1
 		for s in range(S):
 			diff_matrix[s][s] = 0
-		print (diff_matrix)	
+		# print (diff_matrix)	
 		return diff_matrix
 
 	
