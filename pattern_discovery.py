@@ -150,6 +150,7 @@ class SequentialPatternMining:
 			max_var_ind = self.__get_max_var_ind(possible_patterns) 
 			final_pattern = possible_patterns[max_var_ind]
 			print(final_pattern) 
+			return final_pattern
 		else:
 			## If no such pattern exists, extend patterns that gives likely output
 			print ('Case when pattern not found directly')
@@ -162,48 +163,15 @@ class SequentialPatternMining:
 					if len(seq) < min_len:
 							min_len = len(seq)
 							add_pattern = seq
-			max_var_pattern.extend(add_pattern[1:])
-			final_pattern = max_var_pattern
-			print (final_pattern)
+
+			if add_pattern:
+				max_var_pattern.extend(add_pattern[1:])
+				final_pattern = max_var_pattern
+				print (final_pattern)
+				return final_pattern
+			else:
+				return None
 		
-		return final_pattern
-
-
-
-
-		#### ERROR WHEN SHORT PATTERNS START AND END THE SAME STATE AND NO LONGER PATTERN FOUND
-
-		### Looking for patterns that start and stop in the same state
-		possible_patterns = []
-		for seq,support in seq_support_m:
-			if seq[0] == seq[-1]:
-				possible_patterns.append(seq)
-		print ('possible_patterns')
-		print (possible_patterns)
-
-		### Finding max variance among patterns that start and end the same state
-		if possible_patterns:
-			max_var_ind = self.__get_max_var_ind(possible_patterns) 
-			final_pattern = possible_patterns[max_var_ind]
-			print(final_pattern) 
-		else:
-			## If no such pattern exists, extend patterns that gives likely output
-			print ('Case when pattern not found directly')
-			max_var_ind = self.__get_max_var_ind([seq[0] for seq in self.generator_patterns])
-			max_var_pattern = self.generator_patterns[max_var_ind][0] 
-			print(max_var_pattern)
-			min_len = np.inf
-			for seq in self.generator_patterns:
-				if seq[0][0] == max_var_pattern[-1] and seq[0][-1] == max_var_pattern[0]:
-					if len(seq[0]) < min_len:
-							min_len = len(seq[0])
-							add_pattern = seq[0]
-			max_var_pattern.extend(add_pattern[1:])
-			final_pattern = max_var_pattern
-			print (final_pattern)
-		
-		return final_pattern
-
 
 	def cluster_patterns(self):
 		seq_f =  self.maximal_patterns	

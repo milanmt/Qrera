@@ -38,13 +38,17 @@ if __name__ == '__main__':
 	file1, file2 = get_required_files(device_path, day)
 	power_d, power_f = pd.preprocess_power(file1, file2)
 	final_peaks, peak_indices = pd.detect_peaks(power_d, power_f)
-	array, state_attributes = pd.peaks_to_discrete_states(final_peaks)
 
-	# with open('state_attributes.json', 'w') as f:
-	# 	json.dump(state_attributes, f)
+	final_pattern = None
+	while final_pattern == None:
+		array, state_attributes = pd.peaks_to_discrete_states(final_peaks)
+		with open('state_attributes.json', 'w') as f:
+			json.dump(state_attributes, f)
 
-	pm = ptd.SequentialPatternMining(array, state_attributes, time_based_algorithm=False)
-	pm.discover_pattern()
+		pm = ptd.SequentialPatternMining(array, state_attributes)
+		final_pattern = pm.discover_pattern()
+		print (final_pattern)
+
 
 	# with open('state_attributes.json', 'r') as f:
 	# 	state_attributes = json.load(f)
