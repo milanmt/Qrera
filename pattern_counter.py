@@ -40,6 +40,7 @@ if __name__ == '__main__':
 	final_peaks, peak_indices = pd.detect_peaks(power_d, power_f)
 
 	final_pattern = None
+	no_iter = 1
 	while final_pattern == None:
 		array, state_attributes = pd.peaks_to_discrete_states(final_peaks)
 		with open('state_attributes.json', 'w') as f:
@@ -48,6 +49,10 @@ if __name__ == '__main__':
 		pm = ptd.SequentialPatternMining(array, state_attributes)
 		final_pattern = pm.discover_pattern()
 		print (final_pattern)
+		no_iter += 1
+		if no_iter >= 5:
+			raise ValueError('Could not find valid pattern')
+
 
 
 	# with open('state_attributes.json', 'r') as f:
