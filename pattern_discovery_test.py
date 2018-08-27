@@ -270,7 +270,52 @@ class SequentialPatternMining:
 		print (working_patterns)
 		print ('Idle Patterns')
 		print (idle_patterns)
-		return working_patterns, idle_patterns
+
+		######################################################################### clustering 2
+		
+		### Getting means and variances of the patterns
+		pattern_mv = list(np.zeros((len(seq_f),2)))
+		pattern_variances = []
+		for e, seq in enumerate(seq_f):
+			var = np.std([self.state_attributes[str(s)][0] for s in seq[0]])
+			mean_p = np.mean([self.state_attributes[str(s)][0] for s in seq[0]])
+			pattern_mv[e][1] = var
+			pattern_variances.append(var)
+			pattern_mv[e][0] = mean_p
+	
+		### Clustering based on variance and means
+		ap = AffinityPropagation(affinity='euclidean')
+		cl_labels = ap.fit_predict(pattern_mv)
+		cl_exs = [ pattern_mv[ind] for ind in ap.cluster_centers_indices_]
+		cl_v_exs = [pattern_mv[ind][1] for ind in ap.cluster_centers_indices_]
+		idle_label = cl_labels[pattern_variances.index(min(cl_v_exs))]
+
+		### Grouping sequences by cluster label -> later inference 
+		cluster_seqs = dict()
+		for seq, label in zip(seq_f,cl_labels):
+			if label not in cluster_seqs:
+				cluster_seqs.update({label : [seq[0]]})
+			else:
+				seq_list = cluster_seqs[label]
+				seq_list.append(seq[0])
+				cluster_seqs.update({ label: seq_list})
+		print (cluster_seqs)
+
+		### Classification based on variance of patterns, min_var -> idle, rest-> working
+		working_patterns = []
+		idle_patterns = []
+		for e,l in enumerate(cl_labels):
+			if l == idle_label:
+				idle_patterns.append(seq_f[e][0])
+			else:
+				working_patterns.append(seq_f[e][0])
+
+		print ('Working Patterns')
+		print (working_patterns)
+		print ('Idle Patterns')
+		print (idle_patterns)
+
+		return working_patterns, idle_patterns, cluster_seqs
 
 
 def seq_contains(seq, subseq):
