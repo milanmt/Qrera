@@ -28,6 +28,9 @@ class SequentialPatternMining:
 		self.path_to_spmf = '/media/milan/DATA/Qrera'
 		self.time_based_algorithm = time_based_algorithm
 		self.similarity_constraint = 1  ## No single element can appear more than 100x% of the time.
+		self.generator_patterns = self.__get_all_freq_seq()
+		self.maximal_patterns = self.__get_maximal_patterns()
+
 
 	
 	def get_diff_matrix(self):
