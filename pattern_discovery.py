@@ -127,7 +127,7 @@ class SequentialPatternMining:
 		if all(c == max(subseq_count) for c in subseq_count):
 			return None
 		else:
-			return possible_patterns[max_in]
+			return possible_patterns[max_ind]
 	
 	def __get_pattern_by_extension(self, working_patterns):
 		add_pattern = None
