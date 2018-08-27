@@ -12,8 +12,8 @@ import os
 class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes):
 		### Mining generative patterns only
-		self.MAX_LEN = 10
-		self.MIN_LEN = 3
+		self.MAX_LEN = 15
+		self.MIN_LEN = 5
 		self.MIN_SUPPORT = 0.33
 		self.N_SEGMENTS = 48
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
