@@ -9,7 +9,6 @@ import json
 import math
 import os
 
-
 class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes):
 		### Mining generative patterns only
@@ -26,7 +25,6 @@ class SequentialPatternMining:
 		self.path_to_spmf = '/media/milan/DATA/Qrera'
 		self.similarity_constraint = 1  ## No single element can appear more than 100x% of the time
 		self.generator_patterns = self.__get_all_freq_seq() 
-			
 	
 	def get_diff_matrix(self):
 		S = len(self.states)
@@ -43,7 +41,6 @@ class SequentialPatternMining:
 			diff_matrix[s][s] = 0
 		# print (diff_matrix)	
 		return diff_matrix
-
 	
 	def levenshtein_distance(self,a,b):
 		lev_m = np.zeros((len(a)+1,len(b)+1))
@@ -73,7 +70,6 @@ class SequentialPatternMining:
 					lev_m[i][j] = min(lev_m[i-1][j]+score_ins_a, lev_m[i][j-1]+score_ins_b, lev_m[i-1][j-1]+score)
 		return lev_m[len(a)-1][len(b)-1]
 
-
 	def __generate_timeseries_db(self):
 		len_segment = len(self.sequence)//self.N_SEGMENTS
 		with open(self.db_filename, 'w') as f:
@@ -85,7 +81,6 @@ class SequentialPatternMining:
 
 		self.db_filename = os.path.realpath(self.db_filename)
 
-
 	def __pattern_mining(self):
 		self.__generate_timeseries_db()	
 		## Mining Generative Patterns
@@ -93,7 +88,6 @@ class SequentialPatternMining:
 			' '+self.pattern_filename+' '+str(self.MIN_SUPPORT)+' '+
 			str(self.MAX_LEN)+' 1 false'),cwd=self.path_to_spmf,shell=True)
 		self.pattern_filename = os.path.join(self.path_to_spmf, self.pattern_filename)
-
 
 	def __get_all_freq_seq(self):
 		self.__pattern_mining()
@@ -113,7 +107,6 @@ class SequentialPatternMining:
 						seq_support.append((seq, support))
 		return seq_support
 
-
 	def __get_max_var_ind(self, list_seq):
 		cluster_variances = []
 		for seq in list_seq:
@@ -121,7 +114,6 @@ class SequentialPatternMining:
 			cluster_variances.append(var)
 		max_var_ind = cluster_variances.index(max(cluster_variances))
 		return max_var_ind
-
 
 	def __get_most_common_subseq(self, possible_patterns):
 		subseq_count = list(np.zeros(len(possible_patterns)))
@@ -136,7 +128,6 @@ class SequentialPatternMining:
 			return None
 		else:
 			return possible_patterns[max_in]
-
 	
 	def __get_pattern_by_extension(self, working_patterns):
 		add_pattern = None
@@ -188,61 +179,96 @@ class SequentialPatternMining:
 
 	def cluster_patterns(self):
 		seq_f =  self.generator_patterns
+
+		### Clustering maximal sequences using affinity propagation
+		### Computing similarity/affinity matrix using levenshtein distance
+		p_dist = np.zeros((len(seq_f), len(seq_f)))
+		for i in range(len(seq_f)):
+			for j in range(i,len(seq_f)):
+				a = list(seq_f[i][0])
+				b = list(seq_f[j][0])
+				p_dist[i][j] = self.levenshtein_distance(a,b)
+				if i != j:
+					p_dist[j][i] = p_dist[i][j]
+		p_dist = p_dist/np.max(p_dist)
+		p_dist = 1 - p_dist
+		### Affinity Propagation
+		ap = AffinityPropagation(affinity='precomputed')
+		ap.fit(p_dist)
+		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
+		subseq_labels = ap.labels_
+			# print(cluster_subseqs_exs)
+
+		### Arranging sequences by cluster label 
+		cluster_subseqs = dict()
+		for seq, label in zip(seq_f,subseq_labels):
+			if label not in cluster_subseqs:
+				cluster_subseqs.update({label : [seq]})
+			else:
+				seq_list = cluster_subseqs[label]
+				seq_list.append(seq)
+				cluster_subseqs.update({ label: seq_list})
+		# print (cluster_subseqs)
+
+		### Getting average variances and means of the entire clusters for classification
+		cluster_mv = np.zeros((len(cluster_subseqs),2))
+		cluster_v = list(np.zeros(len(cluster_subseqs)))
+		for label, seq_l in cluster_subseqs.items():
+			var_seq_l = []
+			avg_seq_l = []
+			for seq_supp in seq_l:
+				seq = seq_supp[0]
+				var = np.std([self.state_attributes[str(s)][0] for s in seq])
+				avg = np.mean([self.state_attributes[str(s)][0] for s in seq])
+				var_seq_l.append(var)
+				avg_seq_l.append(avg)
+			cluster_v[label] =  np.mean(var_seq_l)
+			cluster_mv[label][1] = np.mean(var_seq_l)
+			cluster_mv[label][0] = np.mean(avg_seq_l)
+		# print (cluster_mv)
+
+		### Clustering the clusters based on means and variances
+		ap_mv = AffinityPropagation(affinity='euclidean')
+		cl_mv_labels = ap_mv.fit_predict(cluster_mv)
+		# print (cl_mv_labels)
+		cl_v_exs = [ cluster_mv[ind][1] for ind in ap_mv.cluster_centers_indices_]
+		# print (cl_v_exs)
+		idle_label = cl_mv_labels[cluster_v.index(min(cl_v_exs))]
 		
-		### Getting means and variances of the patterns
-		pattern_mv = list(np.zeros((len(seq_f),2)))
-		pattern_variances = []
-		for e, seq in enumerate(seq_f):
-			var = np.std([self.state_attributes[str(s)][0] for s in seq[0]])
-			mean_p = np.mean([self.state_attributes[str(s)][0] for s in seq[0]])
-			pattern_mv[e][1] = var
-			pattern_variances.append(var)
-			pattern_mv[e][0] = mean_p
-	
-		### Clustering based on variance and means
-		ap = AffinityPropagation(affinity='euclidean')
-		cl_labels = ap.fit_predict(pattern_mv)
-		cl_exs = [ pattern_mv[ind] for ind in ap.cluster_centers_indices_]
-		cl_v_exs = [pattern_mv[ind][1] for ind in ap.cluster_centers_indices_]
-		idle_label = cl_labels[pattern_variances.index(min(cl_v_exs))]
+		### Classification based on variance of patterns, min_var -> idle, others-> working
+		working_patterns = []
+		idle_patterns = []
+		for e,l in enumerate(cl_mv_labels):
+			if l == idle_label:
+				idle_patterns.extend([seq[0] for seq in cluster_subseqs[e]])
+			else:
+				working_patterns.extend([seq[0] for seq in cluster_subseqs[e]])
 
 		### Grouping sequences by cluster label -> later inference 
 		cluster_seqs = dict()
-		for seq, label in zip(seq_f,cl_labels):
+		for e,label in enumerate(cl_mv_labels):
 			if label not in cluster_seqs:
-				cluster_seqs.update({label : [seq[0]]})
+				cluster_seqs.update({label : cluster_subseqs[e]})
 			else:
 				seq_list = cluster_seqs[label]
-				seq_list.append(seq[0])
+				seq_list.extend(cluster_subseqs[e])
 				cluster_seqs.update({ label: seq_list})
 		print (cluster_seqs)
-
-		### Classification based on variance of patterns, min_var -> idle, rest-> working
-		working_patterns = []
-		idle_patterns = []
-		for e,l in enumerate(cl_labels):
-			if l == idle_label:
-				idle_patterns.append(seq_f[e][0])
-			else:
-				working_patterns.append(seq_f[e][0])
 
 		print ('Working Patterns')
 		print (working_patterns)
 		print ('Idle Patterns')
 		print (idle_patterns)
+
 		return working_patterns, idle_patterns, cluster_seqs 
-
-
 
 def seq_contains(seq, subseq):
 	seq_s = str()
 	for x in seq:
 		seq_s = seq_s + str(x)
-
 	subseq_s = str()
 	for x in subseq:
 		subseq_s = subseq_s + str(x)
-
 	if subseq_s in seq_s:
 		return True
 	else:
