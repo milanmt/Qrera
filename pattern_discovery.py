@@ -156,10 +156,12 @@ class SequentialPatternMining:
 		### Looking for patterns that start and stop in the same state
 		possible_patterns = []
 		for seq in working_patterns:
-			_, count = np.unique(seq, return_counts=True)
-			count = count/sum(count)
-			if seq[0] == seq[-1] and all(c < self.similarity_constraint for c in count):
-				possible_patterns.append(seq)
+			if seq[0] == seq[-1]:
+				if all( self.state_attributes[str(s)][0] >= self.state_attributes[str(seq[0])][0] for s in seq):
+					_, count = np.unique(seq, return_counts=True)
+					count = count/sum(count)
+					if all(c < self.similarity_constraint for c in count):
+						possible_patterns.append(seq)
 		print ('possible_patterns')
 		print (possible_patterns)
 
