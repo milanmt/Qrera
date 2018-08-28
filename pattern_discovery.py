@@ -1,7 +1,9 @@
 #! /usr/bin/env python3
 
+from sklearn.mixture import BayesianGaussianMixture
 from sklearn.cluster import AffinityPropagation
 import matplotlib.pyplot as plt 
+from dtw import dtw
 import numpy as np
 import subprocess
 import pandas 
@@ -19,13 +21,13 @@ class SequentialPatternMining:
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
 		self.state_attributes = state_attributes
 		self.states = [s for s in self.state_attributes.keys()]
-		self.diff_matrix = self.get_diff_matrix()
 		self.db_filename = 'timedb_test.txt'
 		self.pattern_filename = 'output.txt'
 		self.path_to_spmf = '/media/milan/DATA/Qrera'
 		self.similarity_constraint = 1  ## No single element can appear more than 100x% of the time
 		self.generator_patterns = self.__get_all_freq_seq() 
-	
+
+
 	def get_diff_matrix(self):
 		S = len(self.states)
 		diff_matrix = np.zeros((S,S))
@@ -41,6 +43,7 @@ class SequentialPatternMining:
 			diff_matrix[s][s] = 0
 		# print (diff_matrix)	
 		return diff_matrix
+
 	
 	def levenshtein_distance(self,a,b):
 		lev_m = np.zeros((len(a)+1,len(b)+1))
@@ -69,6 +72,13 @@ class SequentialPatternMining:
 						score_ins_b = max_score
 					lev_m[i][j] = min(lev_m[i-1][j]+score_ins_a, lev_m[i][j-1]+score_ins_b, lev_m[i-1][j-1]+score)
 		return lev_m[len(a)-1][len(b)-1]
+	
+	def __pattern_distance(self,a,b):
+		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
+		val_b = np.array([self.state_attributes[str(s)][0] for s in b])
+		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
+		return dist 
+
 
 	def __generate_timeseries_db(self):
 		len_segment = len(self.sequence)//self.N_SEGMENTS
@@ -182,8 +192,8 @@ class SequentialPatternMining:
 	def cluster_patterns(self):
 		seq_f =  self.generator_patterns
 
-		### Clustering maximal sequences using affinity propagation
-		### Computing similarity/affinity matrix using levenshtein distance
+		########## using levenshtein distance 
+
 		p_dist = np.zeros((len(seq_f), len(seq_f)))
 		for i in range(len(seq_f)):
 			for j in range(i,len(seq_f)):
@@ -194,12 +204,25 @@ class SequentialPatternMining:
 					p_dist[j][i] = p_dist[i][j]
 		p_dist = p_dist/np.max(p_dist)
 		p_dist = 1 - p_dist
+
+	
+		# ### Clustering sequences using affinity propagation
+		# ### Computing similarity/affinity matrix using dtw
+		# p_dist = np.zeros((len(seq_f), len(seq_f)))
+		# for i in range(len(seq_f)):
+		# 	for j in range(i,len(seq_f)):
+		# 		p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0])
+		# 		if i != j:
+		# 			p_dist[j][i] = p_dist[i][j]
+		# print (p_dist)
+		# p_dist = p_dist/np.max(p_dist)
+		# p_dist = 1 - p_dist
 		### Affinity Propagation
 		ap = AffinityPropagation(affinity='precomputed')
 		ap.fit(p_dist)
 		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
 		subseq_labels = ap.labels_
-			# print(cluster_subseqs_exs)
+		print(cluster_subseqs_exs)
 
 		### Arranging sequences by cluster label 
 		cluster_subseqs = dict()
@@ -210,32 +233,28 @@ class SequentialPatternMining:
 				seq_list = cluster_subseqs[label]
 				seq_list.append(seq)
 				cluster_subseqs.update({ label: seq_list})
-		# print (cluster_subseqs)
+		print (cluster_subseqs)
+		print ('Number of clusters of patterns: ', len(cluster_subseqs))
 
-		### Getting average variances and means of the entire clusters for classification
-		cluster_mv = np.zeros((len(cluster_subseqs),2))
+		### Getting average variances and means of exemplars for classification
+		cluster_mv = np.zeros((len(cluster_subseqs_exs),2))
 		cluster_v = list(np.zeros(len(cluster_subseqs)))
-		for label, seq_l in cluster_subseqs.items():
-			var_seq_l = []
-			avg_seq_l = []
-			for seq_supp in seq_l:
-				seq = seq_supp[0]
-				var = np.std([self.state_attributes[str(s)][0] for s in seq])
-				avg = np.mean([self.state_attributes[str(s)][0] for s in seq])
-				var_seq_l.append(var)
-				avg_seq_l.append(avg)
-			cluster_v[label] =  np.mean(var_seq_l)
-			cluster_mv[label][1] = np.mean(var_seq_l)
-			cluster_mv[label][0] = np.mean(avg_seq_l)
-		# print (cluster_mv)
+		for label, seq_l in enumerate(cluster_subseqs_exs):
+			var_seq_l = np.std([self.state_attributes[str(s)][0] for s in seq_l])
+			avg_seq_l = np.mean([self.state_attributes[str(s)][0] for s in seq_l])
+			cluster_v[label] =  round(var_seq_l)
+			cluster_mv[label][1] = round(var_seq_l)
+			cluster_mv[label][0] = round(avg_seq_l)
+		print (cluster_mv)
 
-		### Clustering the clusters based on means and variances
+		# ### Affinity Propagation based on means and variances
 		ap_mv = AffinityPropagation(affinity='euclidean')
 		cl_mv_labels = ap_mv.fit_predict(cluster_mv)
 		# print (cl_mv_labels)
 		cl_v_exs = [ cluster_mv[ind][1] for ind in ap_mv.cluster_centers_indices_]
 		# print (cl_v_exs)
 		idle_label = cl_mv_labels[cluster_v.index(min(cl_v_exs))]
+
 		
 		### Classification based on variance of patterns, min_var -> idle, others-> working
 		working_patterns = []
@@ -256,11 +275,13 @@ class SequentialPatternMining:
 				seq_list.extend(cluster_subseqs[e])
 				cluster_seqs.update({ label: seq_list})
 		print (cluster_seqs)
+		print ('Final Number of Clusters: ', len(cluster_seqs))
+		print ('Idle Class: ', idle_label)
 
-		print ('Working Patterns')
-		print (working_patterns)
-		print ('Idle Patterns')
-		print (idle_patterns)
+		# print ('Working Patterns')
+		# print (working_patterns)
+		# print ('Idle Patterns')
+		# print (idle_patterns)
 
 		return working_patterns, idle_patterns, cluster_seqs 
 
