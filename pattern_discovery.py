@@ -113,7 +113,7 @@ class SequentialPatternMining:
 		min_len = np.inf
 		add_pattern = []
 		for seq in working_patterns:
-			if seq[0] == max_var_pattern[-1] and seq[-1] == max_var_pattern[0] and seq != max_var_pattern:
+			if seq[0] == max_var_pattern[-1] and seq[-1] == max_var_pattern[0] and not seq_contains(seq, max_var_pattern):
 				add_pattern.append(seq)
 
 		if add_pattern:
@@ -121,7 +121,7 @@ class SequentialPatternMining:
 			if extension == None:
 				print (add_pattern)
 				extension = max(add_pattern, key=lambda x: np.std([self.state_attributes[str(s)][0] for s in x]))
-
+				print (extension)
 				extension = min(add_pattern, key=lambda x: len(x))
 				print (extension)
 			
