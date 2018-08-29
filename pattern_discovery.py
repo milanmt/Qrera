@@ -14,8 +14,8 @@ import os
 class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes):
 		### Mining generative patterns only
-		self.MAX_LEN = 10
-		self.MIN_LEN = 3
+		self.MAX_LEN =  15
+		self.MIN_LEN = 5
 		self.MIN_SUPPORT = 0.33
 		self.N_SEGMENTS = 48
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
@@ -71,13 +71,22 @@ class SequentialPatternMining:
 						seq_support.append((seq, support))
 		return seq_support
 
-	def __get_max_var_ind(self, list_seq):
-		cluster_variances = []
+	def __get_max_var_pattern(self, list_seq):
+		seq_variances = []
 		for seq in list_seq:
 			var = np.std([self.state_attributes[str(s)][0] for s in seq])
-			cluster_variances.append(var)
-		max_var_ind = cluster_variances.index(max(cluster_variances))
-		return max_var_ind
+			seq_variances.append(var)
+		sorted_seq_variances = sorted(seq_variances, reverse=True)
+
+		for ind in range(len(list_seq)):
+			pattern_ind = seq_variances.index(sorted_seq_variances[ind])
+			req_pattern = list_seq[pattern_ind]
+			min_var = self.state_attributes[str(req_pattern[0])][0]
+			if all( self.state_attributes[str(s)][0] >= min_var for s in req_pattern):
+				return req_pattern
+
+		return None
+
 
 	def __get_most_common_subseq(self, possible_patterns):
 		subseq_count = list(np.zeros(len(possible_patterns)))
@@ -96,18 +105,27 @@ class SequentialPatternMining:
 	def __get_pattern_by_extension(self, working_patterns):
 		add_pattern = None
 		print ('Case when pattern not found directly')
-		max_var_ind = self.__get_max_var_ind([seq for seq in working_patterns])
-		max_var_pattern = working_patterns[max_var_ind]
+		max_var_pattern = self.__get_max_var_pattern(working_patterns)
 		print(max_var_pattern)
-		min_len = np.inf
-		for seq in working_patterns:
-			if seq[0] == max_var_pattern[-1] and seq[-1] == max_var_pattern[0]:
-				if len(seq) < min_len:
-						min_len = len(seq)
-						add_pattern = seq
+		if max_var_pattern == None:
+			return None
 
-		if add_pattern != None:
-			max_var_pattern.extend(add_pattern[1:])
+		min_len = np.inf
+		add_pattern = []
+		for seq in working_patterns:
+			if seq[0] == max_var_pattern[-1] and seq[-1] == max_var_pattern[0] and seq != max_var_pattern:
+				add_pattern.append(seq)
+
+		if add_pattern:
+			extension = self.__get_most_common_subseq(add_pattern)
+			if extension == None:
+				print (add_pattern)
+				extension = max(add_pattern, key=lambda x: np.std([self.state_attributes[str(s)][0] for s in x]))
+
+				extension = min(add_pattern, key=lambda x: len(x))
+				print (extension)
+			
+			max_var_pattern.extend(extension[1:])
 			final_pattern = max_var_pattern
 			print (final_pattern)
 			return final_pattern
@@ -156,6 +174,7 @@ class SequentialPatternMining:
 					p_dist[j][i] = p_dist[i][j]
 		p_dist = p_dist/np.max(p_dist)
 		p_dist = 1 - p_dist
+
 		### Affinity Propagation
 		ap = AffinityPropagation(affinity='precomputed')
 		ap.fit(p_dist)
@@ -178,6 +197,7 @@ class SequentialPatternMining:
 		### Getting average variances and means of exemplars for classification
 		cluster_mv = np.zeros((len(cluster_subseqs),2))
 		cluster_v = list(np.zeros(len(cluster_subseqs)))
+		cluster_mv_norm = list(np.zeros(len(cluster_subseqs)))
 		for label, seq_l in cluster_subseqs.items():
 			var_seq_l = []
 			avg_seq_l = []
@@ -190,7 +210,9 @@ class SequentialPatternMining:
 			cluster_v[label] =  np.mean(var_seq_l)
 			cluster_mv[label][1] = np.mean(var_seq_l)
 			cluster_mv[label][0] = np.mean(avg_seq_l)
+			cluster_mv_norm[label] = np.linalg.norm(cluster_mv[label])
 		# print (cluster_mv)
+		# print (cluster_mv_norm)
 
 		### Affinity Propagation based on means and variances
 		ap_mv = AffinityPropagation(affinity='euclidean')
@@ -198,7 +220,8 @@ class SequentialPatternMining:
 		# print (cl_mv_labels)
 		cl_v_exs = [ cluster_mv[ind][1] for ind in ap_mv.cluster_centers_indices_]
 		# print (cl_v_exs)
-		idle_label = cl_mv_labels[cluster_v.index(min(cl_v_exs))]
+		# idle_label = cl_mv_labels[cluster_v.index(min(cl_v_exs))]
+		idle_label = cl_mv_labels[cluster_mv_norm.index(min(cluster_mv_norm))]
 
 		
 		### Classification based on variance of patterns, min_var -> idle, others-> working
