@@ -171,14 +171,15 @@ class SequentialPatternMining:
 			print ('Number of clusters with DTW: ', len(different_patterns))
 			
 			## Checking if no exemplar is part of any other exemplar
-			final_patterns = []
 			if len(exemplars) != len(possible_patterns):
-				for pattern in exemplars:
-					for pattern_l in exemplars:
-						if pattern != pattern_l and not seq_contains(pattern_l,pattern):
-							final_patterns.append(pattern)
-				print(final_patterns) 
-				return final_patterns
+				for el in exemplars:
+					for p in exemplars:
+						if p != el:
+							if seq_contains(p,el):
+								del exemplars[exemplars.index(el)]
+								break
+				print (exemplars)
+				return exemplars
 			else:
 				return self.__get_pattern_by_extension(working_patterns)
 
