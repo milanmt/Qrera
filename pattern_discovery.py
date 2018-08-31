@@ -30,7 +30,7 @@ class SequentialPatternMining:
 		### Mining generative patterns only
 		self.MAX_LEN =  15
 		self.MIN_LEN = 5
-		self.MIN_SUPPORT = 0.2
+		self.MIN_SUPPORT = 0.33
 		self.N_SEGMENTS = 48
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
 		self.state_attributes = state_attributes
@@ -41,12 +41,9 @@ class SequentialPatternMining:
 		self.similarity_constraint = 0.9  ## No single element can appear more than 100x% of the time
 		self.generator_patterns = self.__get_all_freq_seq() 
 	
-	def __pattern_distance(self,a,b,normalised):
+	def __pattern_distance(self,a,b):
 		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
 		val_b = np.array([self.state_attributes[str(s)][0] for s in b])
-		if normalised==True:
-			val_a = val_a/np.max(val_a)
-			val_b = val_b/np.max(val_b)
 		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
 		return dist 
 
@@ -107,6 +104,8 @@ class SequentialPatternMining:
 
 
 	def __get_most_common_subseq(self, possible_patterns):
+		if isinstance(possible_patterns[0], tuple):
+			possible_patterns = [seq[0] for seq in possible_patterns]
 		subseq_count = list(np.zeros(len(possible_patterns)))
 		for e,seq in enumerate(possible_patterns):
 			for seql in possible_patterns:
@@ -154,28 +153,30 @@ class SequentialPatternMining:
 	def discover_pattern(self):
 		working_patterns, idle_patterns, pattern_dict = self.cluster_patterns()
 		
-		### Looking for patterns that start and stop in the same state
+		### Looking for patterns that start and stop in the same state, and have less than 90% similarity
 		possible_patterns = []
 		for seq in working_patterns:
 			if seq[0][0] == seq[0][-1]:
 				if all( self.state_attributes[str(s)][0] >= self.state_attributes[str(seq[0][0])][0] for s in seq[0]):
-					_, count = np.unique(seq, return_counts=True)
+					_, count = np.unique(seq[0], return_counts=True)
 					count = count/sum(count)
 					if all(c < self.similarity_constraint for c in count):
-						possible_patterns.append(seq[0])
-		print ('possible_patterns')
-		print (possible_patterns)
-
-		### Finding max variance among patterns that start and end the same state
+						possible_patterns.append(seq)
+	
+		### Clustering with DTW to find patterns. Exemplars -> final patterns 
 		if possible_patterns:
-			different_patterns, exemplars = self.__dtw_clustering(possible_patterns,normalised=True)
+			different_patterns, exemplars = self.__dtw_clustering(possible_patterns)
+			print (exemplars)
+			print (different_patterns)
+			print ('Number of clusters with DTW: ', len(different_patterns))
+			
+			## Checking if no exemplar is part of any other exemplar
 			final_patterns = []
-			for patterns in different_patterns.values():
-				fp = self.__get_most_common_subseq(patterns)
-				if fp != None:
-					final_patterns.append(fp)
-
-			if final_patterns:
+			if len(exemplars) != len(possible_patterns):
+				for pattern in exemplars:
+					for pattern_l in exemplars:
+						if pattern != pattern_l and not seq_contains(pattern_l,pattern):
+							final_patterns.append(pattern)
 				print(final_patterns) 
 				return final_patterns
 			else:
@@ -185,13 +186,13 @@ class SequentialPatternMining:
 			## If no such pattern exists, extend patterns that gives likely output
 			return self.__get_pattern_by_extension(working_patterns)
 
-	def __dtw_clustering(self, seq_f, normalised=False):
+	def __dtw_clustering(self, seq_f):
 		### Clustering sequences using affinity propagation, dtw
 		### Computing similarity/affinity matrix using dtw
 		p_dist = np.zeros((len(seq_f), len(seq_f)))
 		for i in range(len(seq_f)):
 			for j in range(i,len(seq_f)):
-				p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0],normalised)
+				p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0])
 				if i != j:
 					p_dist[j][i] = p_dist[i][j]
 		p_dist = p_dist/np.max(p_dist)
@@ -219,8 +220,7 @@ class SequentialPatternMining:
 		seq_f =  self.generator_patterns
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
-		# print (cluster_subseqs)
-		print ('Number of clusters with non-normal DTW: ', len(cluster_subseqs))
+		print ('Number of clusters with DTW: ', len(cluster_subseqs))
 
 		### Getting average variances and means of exemplars for classification
 		cluster_mv = np.zeros((len(cluster_subseqs),2))
