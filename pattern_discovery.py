@@ -41,10 +41,12 @@ class SequentialPatternMining:
 		self.similarity_constraint = 0.9  ## No single element can appear more than 100x% of the time
 		self.generator_patterns = self.__get_all_freq_seq() 
 	
-	def __pattern_distance(self,a,b):
+	def __pattern_distance(self,a,b, print_val=False):
 		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
 		val_b = np.array([self.state_attributes[str(s)][0] for s in b])
 		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
+		if print_val == True:
+			print (a,b, dist)
 		return dist 
 
 	@timing_wrapper
@@ -165,7 +167,7 @@ class SequentialPatternMining:
 	
 		### Clustering with DTW to find patterns. Exemplars -> final patterns 
 		if possible_patterns:
-			different_patterns, exemplars = self.__dtw_clustering(possible_patterns)
+			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, print_val=True)
 			print (exemplars)
 			print (different_patterns)
 			print ('Number of clusters with DTW: ', len(different_patterns))
@@ -187,20 +189,20 @@ class SequentialPatternMining:
 			## If no such pattern exists, extend patterns that gives likely output
 			return self.__get_pattern_by_extension(working_patterns)
 
-	def __dtw_clustering(self, seq_f):
+	def __dtw_clustering(self, seq_f, print_val=False):
 		### Clustering sequences using affinity propagation, dtw
 		### Computing similarity/affinity matrix using dtw
 		p_dist = np.zeros((len(seq_f), len(seq_f)))
 		for i in range(len(seq_f)):
 			for j in range(i,len(seq_f)):
-				p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0])
+				p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0],print_val)
 				if i != j:
 					p_dist[j][i] = p_dist[i][j]
-		p_dist = p_dist/np.max(p_dist)
-		p_dist = 1 - p_dist
+		p_dist = np.max(p_dist) - p_dist
+		print (p_dist)
 
 		### Affinity Propagation
-		ap = AffinityPropagation(affinity='precomputed')
+		ap = AffinityPropagation(affinity='precomputed',preference=0.5*np.max(p_dist))
 		ap.fit(p_dist)
 		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
 		
