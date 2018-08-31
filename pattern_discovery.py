@@ -41,12 +41,10 @@ class SequentialPatternMining:
 		self.similarity_constraint = 0.9  ## No single element can appear more than 100x% of the time
 		self.generator_patterns = self.__get_all_freq_seq() 
 	
-	def __pattern_distance(self,a,b, print_val=False):
+	def __pattern_distance(self,a,b):
 		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
 		val_b = np.array([self.state_attributes[str(s)][0] for s in b])
 		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
-		if print_val == True:
-			print (a,b, dist)
 		return dist 
 
 	@timing_wrapper
@@ -167,7 +165,7 @@ class SequentialPatternMining:
 	
 		### Clustering with DTW to find patterns. Exemplars -> final patterns 
 		if possible_patterns:
-			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, print_val=True)
+			different_patterns, exemplars = self.__dtw_clustering(possible_patterns)
 			print (exemplars)
 			print (different_patterns)
 			print ('Number of clusters with DTW: ', len(different_patterns))
@@ -189,13 +187,13 @@ class SequentialPatternMining:
 			## If no such pattern exists, extend patterns that gives likely output
 			return self.__get_pattern_by_extension(working_patterns)
 
-	def __dtw_clustering(self, seq_f, print_val=False):
+	def __dtw_clustering(self, seq_f):
 		### Clustering sequences using affinity propagation, dtw
 		### Computing similarity/affinity matrix using dtw
 		p_dist = np.zeros((len(seq_f), len(seq_f)))
 		for i in range(len(seq_f)):
 			for j in range(i,len(seq_f)):
-				p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0],print_val)
+				p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0])
 				if i != j:
 					p_dist[j][i] = p_dist[i][j]
 		p_dist = np.max(p_dist) - p_dist
