@@ -1,8 +1,8 @@
 #! /usr/bin/env python3
 
+from scipy.signal import find_peaks, butter, filtfilt
 from sklearn.mixture import BayesianGaussianMixture
 from datetime import datetime, timedelta
-from scipy.signal import find_peaks, butter, filtfilt
 import matplotlib.pyplot as plt
 import pattern_discovery
 import find_threshold 
@@ -14,23 +14,43 @@ import os
 
 THRESHOLD = 2610
 
+def timing_wrapper(func):
+	def wrapper(*args,**kwargs):
+		
+		t0= time.time()
+		func_val = func(*args,**kwargs)
+		time_taken = time.time() - t0
+
+		print (str(func),' took: ', time_taken)
+
+		return func_val
+
+	return wrapper
+
+def get_required_files(device_path, day):
+	print ('Obtaining Required Files...')
+	file1 = None
+	file2 = None
+	end_search = False
+	for root, dirs, files in os.walk(device_path):
+		if files and not end_search:
+			files.sort()
+			for f in files:
+				if day in f and f.endswith('.csv.gz'):
+					file1 = os.path.join(root,f)
+				if file1 and os.path.join(root,f) > file1:
+					file2 =  os.path.join(root,f)
+					end_search = True
+					break
+	return file1, file2
+
+
 def zero_cross_detector(sig):
 	indices = []
 	for i in range(len(sig)-1):
 		if sig[i] > 0 and sig[i+1] < 0:
 			indices.append(i)
 	return np.array(indices)
-
-def var_round(number):
-	number = float(number)
-	
-	if number/10 <= 10:
-		return round(number)
-	elif number/10 <= 1000:
-		return round(number, -1)
-	else:
-		return round(number, -2)
-
 
 def lpf(data):
 	if len(data) < 13:
@@ -41,7 +61,7 @@ def lpf(data):
 	
 	return y
 
-
+@timing_wrapper
 def preprocess_power(f1, f2):
 	print ('Preprocessing files to extract data...')
 
@@ -94,37 +114,14 @@ def preprocess_power(f1, f2):
 
 	return power_d, power_f
 
-
-def get_required_files(device_path, day):
-
-	print ('Obtaining Required Files...')
-
-	file1 = None
-	file2 = None
-	end_search = False
-
-	for root, dirs, files in os.walk(device_path):
-		if files and not end_search:
-			files.sort()
-			for f in files:
-				if day in f and f.endswith('.csv.gz'):
-					file1 = os.path.join(root,f)
-
-				if file1 and os.path.join(root,f) > file1:
-					file2 =  os.path.join(root,f)
-					end_search = True
-					break
-
-	return file1, file2
-
-
+@timing_wrapper
 def detect_peaks(power_d, power_f):
 	print ('Detecting Peaks of Signal....')
 	# power_d - smoothed derivative of signal;
 	# power_f - filtered signal
 	# peaks, _ = find_peaks(power_d)  # Find peaks returns the actual peaks of derivative
 	
-	peaks = zero_cross_detector(power_d)  # Returns indices 
+	peaks = zero_cross_detector(power_d)  # Returns indices of peaks in signal 
 	peaks = peaks+1
 	
 	## For obtaining actual signal with peaks.
@@ -135,13 +132,14 @@ def detect_peaks(power_d, power_f):
 
 	return final_peaks, peaks
 
+@timing_wrapper
 def peaks_to_discrete_states(final_peaks):
 	#### BayesianGaussianMixture
 
 	total_peaks = np.array(final_peaks)
 	X = total_peaks.reshape(-1,1)
 
-	dpgmm = BayesianGaussianMixture(n_components=10,covariance_type='spherical', n_init=3).fit(X)
+	dpgmm = BayesianGaussianMixture(n_components=10,max_iter= 500,covariance_type='spherical').fit(X)
 	labels = dpgmm.predict(X)
 	states = np.unique(labels)
 
@@ -150,6 +148,8 @@ def peaks_to_discrete_states(final_peaks):
 		state_attributes.update({ str(s) : (dpgmm.means_[s][0], dpgmm.covariances_[s])}) # key should be string for json 
 	
 	print ('Number of states: ', len(np.unique(labels)), states)
+	# print (dpgmm.means_)
+	# print (dpgmm.covariances_)
 
 	color=['navy', 'c', 'cornflowerblue', 'gold','darkorange', 'r', 'g', 'm', 'y', 'k']
 	
@@ -169,7 +169,7 @@ def peaks_to_discrete_states(final_peaks):
 if __name__ == '__main__':
 
 	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_06'
+	day = '2018_07_07'
 
 	file1, file2 = get_required_files(device_path, day)
 
@@ -223,7 +223,7 @@ if __name__ == '__main__':
 	
 
 	####################### Filtering peaks with a threshold
-	# peak_pr = [var_round(p) for p in final_peaks]
+	# peak_pr = [round(p) for p in final_peaks]
 	# peak_threshold = find_threshold.get_otsus_threshold(peak_pr)
 	# print ('peak_threshold', peak_threshold)
 
