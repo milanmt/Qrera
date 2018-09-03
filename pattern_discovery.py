@@ -28,7 +28,7 @@ def timing_wrapper(func):
 class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes):
 		### Mining generative patterns only
-		self.MAX_LEN =  15
+		self.MAX_LEN =  7
 		self.MIN_LEN = 3
 		self.MIN_SUPPORT = 0.33
 		self.N_SEGMENTS = 48
@@ -142,7 +142,7 @@ class SequentialPatternMining:
 				print (final_pattern)
 			else:
 				return None
-		
+
 		return final_pattern
 
 	@timing_wrapper
@@ -161,7 +161,7 @@ class SequentialPatternMining:
 	
 		### Clustering with DTW to find patterns. Exemplars -> final patterns 
 		if possible_patterns:
-			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, preference=0.5*np.max(p_dist))
+			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, preference='half_max')
 			print (exemplars)
 			print (different_patterns)
 			print ('Number of clusters with DTW: ', len(different_patterns))
@@ -195,7 +195,10 @@ class SequentialPatternMining:
 		p_dist = np.max(p_dist) - p_dist
 		
 		### Affinity Propagation
-		ap = AffinityPropagation(affinity='precomputed',preference=preference)
+		if preference != None:
+			ap = AffinityPropagation(affinity='precomputed',preference=np.max(p_dist)/2)
+		else:
+			ap = AffinityPropagation(affinity='precomputed')
 		ap.fit(p_dist)
 		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
 		
