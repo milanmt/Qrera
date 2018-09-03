@@ -122,32 +122,28 @@ class SequentialPatternMining:
 	def __get_pattern_by_extension(self, working_patterns):
 		add_pattern = None
 		print ('Case when pattern not found directly')
-		max_var_pattern = self.__get_max_var_pattern(working_patterns)
-		print(max_var_pattern)
-		if max_var_pattern == None:
+		final_pattern = self.__get_max_var_pattern(working_patterns)
+		print(final_pattern)
+		if final_pattern == None:
 			return None
 
-		min_len = np.inf
-		add_pattern = []
-		for seq in working_patterns:
-			if seq[0] == max_var_pattern[-1] and seq[-1] == max_var_pattern[0] and not seq_contains(seq, max_var_pattern):
-				add_pattern.append(seq)
+		while(self.state_attributes[str(final_pattern[0])][0] < self.state_attributes[str(final_pattern[-1])][0]):
+			min_len = np.inf
+			add_pattern = []
+			for seq in working_patterns:
+				if seq[0][0] == final_pattern[-1] and not seq_contains(seq, final_pattern):
+					add_pattern.append(seq)
 
-		if add_pattern:
-			extension = self.__get_most_common_subseq(add_pattern)
-			if extension == None:
+			if add_pattern:
+				extension = max(add_pattern, key=lambda x:x[1])
 				print (add_pattern)
-				extension = max(add_pattern, key=lambda x: np.std([self.state_attributes[str(s)][0] for s in x]))
 				print (extension)
-				extension = min(add_pattern, key=lambda x: len(x))
-				print (extension)
-			
-			max_var_pattern.extend(extension[1:])
-			final_pattern = max_var_pattern
-			print (final_pattern)
-			return final_pattern
-		else:
-			return None
+				final_pattern.extend(extension[0][1:])
+				print (final_pattern)
+			else:
+				return None
+		
+		return final_pattern
 
 	@timing_wrapper
 	def discover_pattern(self):
