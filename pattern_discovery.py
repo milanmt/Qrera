@@ -29,7 +29,7 @@ class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes):
 		### Mining generative patterns only
 		self.MAX_LEN =  15
-		self.MIN_LEN = 5
+		self.MIN_LEN = 3
 		self.MIN_SUPPORT = 0.33
 		self.N_SEGMENTS = 48
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
@@ -88,16 +88,16 @@ class SequentialPatternMining:
 
 	def __get_max_var_pattern(self, list_seq):
 		seq_variances = []
-		for seq in list_seq:
+		for seq, support in list_seq:
 			var = np.std([self.state_attributes[str(s)][0] for s in seq])
 			seq_variances.append(var)
 		sorted_seq_variances = sorted(seq_variances, reverse=True)
 
 		for ind in range(len(list_seq)):
 			pattern_ind = seq_variances.index(sorted_seq_variances[ind])
-			req_pattern = list_seq[pattern_ind]
-			min_var = self.state_attributes[str(req_pattern[0])][0]
-			if all( self.state_attributes[str(s)][0] >= min_var for s in req_pattern):
+			req_pattern = list_seq[pattern_ind][0]
+			min_el = self.state_attributes[str(req_pattern[0])][0]
+			if all( self.state_attributes[str(s)][0] >= min_el for s in req_pattern):
 				return req_pattern
 
 		return None
@@ -165,7 +165,7 @@ class SequentialPatternMining:
 	
 		### Clustering with DTW to find patterns. Exemplars -> final patterns 
 		if possible_patterns:
-			different_patterns, exemplars = self.__dtw_clustering(possible_patterns)
+			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, preference=0.5*np.max(p_dist))
 			print (exemplars)
 			print (different_patterns)
 			print ('Number of clusters with DTW: ', len(different_patterns))
@@ -187,7 +187,7 @@ class SequentialPatternMining:
 			## If no such pattern exists, extend patterns that gives likely output
 			return self.__get_pattern_by_extension(working_patterns)
 
-	def __dtw_clustering(self, seq_f):
+	def __dtw_clustering(self, seq_f, preference=None):
 		### Clustering sequences using affinity propagation, dtw
 		### Computing similarity/affinity matrix using dtw
 		p_dist = np.zeros((len(seq_f), len(seq_f)))
@@ -197,10 +197,9 @@ class SequentialPatternMining:
 				if i != j:
 					p_dist[j][i] = p_dist[i][j]
 		p_dist = np.max(p_dist) - p_dist
-		print (p_dist)
-
+		
 		### Affinity Propagation
-		ap = AffinityPropagation(affinity='precomputed',preference=0.5*np.max(p_dist))
+		ap = AffinityPropagation(affinity='precomputed',preference=preference)
 		ap.fit(p_dist)
 		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
 		
@@ -222,6 +221,7 @@ class SequentialPatternMining:
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
 		print ('Number of clusters with DTW: ', len(cluster_subseqs))
+		print (cluster_subseqs)
 
 		### Getting average variances and means of exemplars for classification
 		cluster_mv = np.zeros((len(cluster_subseqs),2))
