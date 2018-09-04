@@ -140,7 +140,9 @@ def peaks_to_discrete_states(final_peaks):
 	X = total_peaks.reshape(-1,1)
 
 	dpgmm = BayesianGaussianMixture(n_components=10,max_iter= 500,covariance_type='spherical').fit(X)
-	labels = dpgmm.predict(X)
+	unordered_labels = dpgmm.predict(X)
+	sorted_means = sorted(dpgmm.means_, key=lambda x:x[0])
+	labels = [sorted_means.index(dpgmm.means_[l][0]) for l in unordered_labels]
 	states = np.unique(labels)
 
 	state_attributes = dict()
