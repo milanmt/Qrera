@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 
+from scipy.spatial.distance import pdist, squareform
 from sklearn.mixture import BayesianGaussianMixture
 from sklearn.cluster import AffinityPropagation
 import matplotlib.pyplot as plt 
@@ -26,13 +27,14 @@ def timing_wrapper(func):
 	return wrapper
 
 class SequentialPatternMining:
-	def __init__(self, sequence, state_attributes):
+	def __init__(self, sequence, state_attributes, peak_indices):
 		### Mining generative patterns only
-		self.MAX_LEN =  7
+		self.MAX_LEN =  10
 		self.MIN_LEN = 3
 		self.MIN_SUPPORT = 0.33
-		self.N_SEGMENTS = 48
+		self.LEN_SEGMENT = 900
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
+		self.peak_indices = peak_indices
 		self.state_attributes = state_attributes
 		self.states = [s for s in self.state_attributes.keys()]
 		self.db_filename = 'timedb_test.txt'
@@ -49,13 +51,20 @@ class SequentialPatternMining:
 
 	@timing_wrapper
 	def __generate_timeseries_db(self):
-		len_segment = len(self.sequence)//self.N_SEGMENTS
 		with open(self.db_filename, 'w') as f:
-			for i in range(self.N_SEGMENTS):
-				segment = self.sequence[i*len_segment : i*len_segment+len_segment]
-				for s in segment:
-					f.write('{0} -1 '.format(s)) 
-				f.write('-2\n')
+			for i in range(86400//self.LEN_SEGMENT):
+				segment_ind = []
+				for e,ind in enumerate(self.peak_indices):
+					if ind >= i*self.LEN_SEGMENT and ind < (i+1)*self.LEN_SEGMENT:
+						segment_ind.append(e)
+					elif ind >= (i+1)*self.LEN_SEGMENT:
+						break
+
+				if segment_ind:
+					segment = self.sequence[segment_ind[0]:segment_ind[-1]+1]
+					for s in segment:
+						f.write('{0} -1 '.format(s)) 
+					f.write('-2\n')
 
 		self.db_filename = os.path.realpath(self.db_filename)
 
@@ -131,7 +140,7 @@ class SequentialPatternMining:
 			min_len = np.inf
 			add_pattern = []
 			for seq in working_patterns:
-				if seq[0][0] == final_pattern[-1] and not seq_contains(seq, final_pattern):
+				if seq[0][0] == final_pattern[-1] and not seq_contains(final_pattern, seq):
 					add_pattern.append(seq)
 
 			if add_pattern:
@@ -160,9 +169,9 @@ class SequentialPatternMining:
 						possible_patterns.append(seq)
 	
 		### Clustering with DTW to find patterns. Exemplars -> final patterns 
-		if possible_patterns:
-			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, preference='half_max')
-			print (exemplars)
+		if len(possible_patterns) > 1:
+			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, preference='percent_max')
+			# print (exemplars)
 			print (different_patterns)
 			print ('Number of clusters with DTW: ', len(different_patterns))
 			
@@ -196,9 +205,9 @@ class SequentialPatternMining:
 		
 		### Affinity Propagation
 		if preference != None:
-			ap = AffinityPropagation(affinity='precomputed',preference=np.max(p_dist)/2)
+			ap = AffinityPropagation(affinity='precomputed',preference=0.9*np.max(p_dist))
 		else:
-			ap = AffinityPropagation(affinity='precomputed')
+			ap = AffinityPropagation(affinity='precomputed',preference=np.average(p_dist))
 		ap.fit(p_dist)
 		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
 		
@@ -220,7 +229,7 @@ class SequentialPatternMining:
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
 		print ('Number of clusters with DTW: ', len(cluster_subseqs))
-		print (cluster_subseqs)
+		# print (cluster_subseqs)
 
 		### Getting average variances and means of exemplars for classification
 		cluster_mv = np.zeros((len(cluster_subseqs),2))
@@ -237,10 +246,14 @@ class SequentialPatternMining:
 			cluster_mv[label][1] = np.mean(var_seq_l)
 			cluster_mv[label][0] = np.mean(avg_seq_l)
 			cluster_mv_norm[label] = np.linalg.norm(cluster_mv[label])
-		
+
+		### Obtaining affinity matrix
+		p_dist = squareform(pdist(cluster_mv))
+		p_dist = np.max(p_dist)- p_dist
+
 		### Affinity Propagation based on means and variances
-		ap_mv = AffinityPropagation(affinity='euclidean')
-		cl_mv_labels = ap_mv.fit_predict(cluster_mv)
+		ap_mv = AffinityPropagation(affinity='precomputed', preference=0.85*np.max(p_dist))
+		cl_mv_labels = ap_mv.fit_predict(p_dist)
 		cl_v_exs = [ cluster_mv[ind][1] for ind in ap_mv.cluster_centers_indices_]
 		idle_label = cl_mv_labels[cluster_mv_norm.index(min(cluster_mv_norm))]
 		
