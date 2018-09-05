@@ -29,8 +29,9 @@ def timing_wrapper(func):
 class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes, peak_indices):
 		### Mining generative patterns only
-		self.MAX_LEN =  10
-		self.MIN_LEN = 3
+		self.MAX_LEN =  20
+		self.MIN_LEN = 5
+		self.MAX_LEN_EXTENSION = 50
 		self.MIN_SUPPORT = 0.33
 		self.LEN_SEGMENT = 900
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
@@ -131,19 +132,26 @@ class SequentialPatternMining:
 	def __get_pattern_by_extension(self, working_patterns):
 		add_pattern = None
 		print ('Case when pattern not found directly')
+		bag_of_patterns = list(working_patterns)
+
 		final_pattern = self.__get_max_var_pattern(working_patterns)
 		print(final_pattern)
 		if final_pattern == None:
 			return None
 
-		while(self.state_attributes[str(final_pattern[0])][0] < self.state_attributes[str(final_pattern[-1])][0]):
+
+		while(self.state_attributes[str(final_pattern[0])][0] < self.state_attributes[str(final_pattern[-1])][0] and len(final_pattern) < self.MAX_LEN_EXTENSION):
 			min_len = np.inf
 			add_pattern = []
 			for seq in working_patterns:
-				if seq[0][0] == final_pattern[-1] and not seq_contains(final_pattern, seq):
+				if seq[0][0] == final_pattern[-1] and not seq_contains(final_pattern, seq[0]):
 					add_pattern.append(seq)
 
 			if add_pattern:
+				# if len(add_pattern) > 1:
+
+				# else:
+
 				extension = max(add_pattern, key=lambda x:x[1])
 				print (add_pattern)
 				print (extension)
