@@ -29,9 +29,9 @@ def timing_wrapper(func):
 class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes, peak_indices):
 		### Mining generative patterns only
-		self.MAX_LEN =  20
+		self.MAX_LEN =  10
 		self.MIN_LEN = 5
-		self.MAX_LEN_EXTENSION = 50
+		self.MAX_LEN_EXTENSION = 40
 		self.MIN_SUPPORT = 0.33
 		self.LEN_SEGMENT = 900
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
@@ -43,6 +43,10 @@ class SequentialPatternMining:
 		self.path_to_spmf = '/media/milan/DATA/Qrera'
 		self.similarity_constraint = 0.9  ## No single element can appear more than 100x% of the time
 		self.generator_patterns = self.__get_all_freq_seq() 
+		self.pattern_dict = None
+		self.working_patterns = None
+		self.max_var_label = None
+		self.idle_label = None
 	
 	def __pattern_distance(self,a,b):
 		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
@@ -128,43 +132,130 @@ class SequentialPatternMining:
 			return None
 		else:
 			return possible_patterns[max_ind]
+
+	# def __extend_pattern(self, root_pattern, bag_of_patterns):
+	# 	add_pattern = []
+	# 	for seq in bag_of_patterns:
+	# 		if seq[0][0] == final_pattern[-1] and not seq_contains(final_pattern, seq[0]):
+	# 			add_pattern.append(seq)
+
+	# 		if add_pattern:
+	# 			if len(add_pattern) > 1:
+	# 				clusters, exs = self.__dtw_clustering(add_pattern, preference='percent_max')
+	# 				print (clusters)
+	# 				print (exs)
+	# 				for e, extension in enumerate(exs):
+	# 					new_bag = list(bag_of_patterns)
+	# 					root_pattern.extend(extension[1:])
+	# 					print (root_pattern)
+	# 					for pattern in clusters[e]:
+	# 						new_bag.remove(pattern)
+
+	# 					if root_pattern[0] != root_pattern[-1] or len(root_pattern) < self.MAX_LEN_EXTENSION:
+	# 						root_pattern = self.__extend_pattern(root_pattern, new_bag)
+	# 					else:
+	# 						return root_pattern
+
+	# 			else:
+	# 				extension = add_pattern[0]
+	# 				print (add_pattern)
+	# 				print (extension)
+	# 				root_pattern.extend(extension[0][1:])
+	# 				print (final_pattern)
+	# 				bag_of_patterns.remove(extension)
+	# 				new_bag = bag_of_patterns
+
+	# 				if root_pattern[0] != root_pattern[-1] or len(root_pattern) < self.MAX_LEN_EXTENSION:
+	# 					root_pattern = self.__extend_pattern(root_pattern, new_bag)
+	# 				else:
+	# 					return root_pattern
+
+
+	# def __get_patterns_by_extension(self):
+	# 	max_var_patterns = [seq for seq in self.pattern_dict[self.max_var_label] if all(seq[0][0] <= s for s in seq[0])]
+	# 	if not max_var_patterns:
+	# 		return None
+
+	# 	bag_of_patterns = []
+	# 	for k, patterns in self.pattern_dict.items():
+	# 		if k != self.max_var_label or k != self.idle_label:
+	# 			bag_of_patterns.extend(patterns)
+
+	# 	_, roots = self.__dtw_clustering(max_var_patterns)
+
+	# 	final_pattern = []
+	# 	for root in roots:
+	# 		self.__extend_pattern(root, bag_of_patterns)
+
+
+
 	
 	def __get_pattern_by_extension(self, working_patterns):
 		add_pattern = None
 		print ('Case when pattern not found directly')
-		bag_of_patterns = list(working_patterns)
 
-		final_pattern = self.__get_max_var_pattern(working_patterns)
-		print(final_pattern)
-		if final_pattern == None:
+		max_var_patterns = [seq for seq in self.pattern_dict[self.max_var_label] if all(seq[0][0] <= s for s in seq[0])]
+		
+		print (max_var_patterns)
+
+		if not max_var_patterns:
 			return None
 
 
-		while(self.state_attributes[str(final_pattern[0])][0] < self.state_attributes[str(final_pattern[-1])][0] and len(final_pattern) < self.MAX_LEN_EXTENSION):
-			min_len = np.inf
-			add_pattern = []
-			for seq in working_patterns:
-				if seq[0][0] == final_pattern[-1] and not seq_contains(final_pattern, seq[0]):
-					add_pattern.append(seq)
+		_, roots = self.__dtw_clustering(max_var_patterns, preference='median')
+		print (roots)
 
-			if add_pattern:
-				# if len(add_pattern) > 1:
+		final_patterns = []
+		for final_pattern in roots:
+			bag_of_patterns = []
+			for k, patterns in self.pattern_dict.items():
+				if k != self.max_var_label or k != self.idle_label:
+					bag_of_patterns.extend(patterns)
 
-				# else:
 
-				extension = max(add_pattern, key=lambda x:x[1])
-				print (add_pattern)
-				print (extension)
-				final_pattern.extend(extension[0][1:])
-				print (final_pattern)
-			else:
-				return None
+			first_element = final_pattern[0]
+			look_from_here = len(final_pattern) - [final_pattern[i] for i in range(len(final_pattern)-1,-1,-1)].index(first_element)
+			while(all(first_element < el for el in final_pattern[look_from_here:]) and len(final_pattern) < self.MAX_LEN_EXTENSION):
+				min_len = np.inf
+				add_pattern = [] 
+				for seq in bag_of_patterns:
+					if seq[0][0] == final_pattern[-1] and not seq_contains(final_pattern, seq[0]):
+						add_pattern.append(seq)
 
-		return final_pattern
+				if add_pattern:
+					if len(add_pattern) > 1:
+						clusters, exs = self.__dtw_clustering(add_pattern, preference='percent_max')
+						print (clusters)
+						print (exs)
+						ext_ind = max(clusters.keys(), key=lambda x: sum([p[1] for p in clusters[x]]))
+						extension = exs[ext_ind]
+						print (extension)
+						final_pattern.extend(extension[1:])
+						print (final_pattern)
+						for pattern in clusters[ext_ind]:
+							bag_of_patterns.remove(pattern)
+
+					else:
+						extension = add_pattern[0]
+						print (add_pattern)
+						print (extension)
+						final_pattern.extend(extension[0][1:])
+						print (final_pattern)
+
+				
+					last_element = self.state_attributes[str(final_pattern[-1])][0]
+				else:
+					final_patterns.append(final_pattern)
+
+			end_ind = len(final_pattern) - [final_pattern[i] for i in range(len(final_pattern)-1,-1,-1)].index(first_element)
+			final_patterns.append(final_pattern[:end_ind])
+
+		return final_patterns
 
 	@timing_wrapper
 	def discover_pattern(self):
-		working_patterns, idle_patterns, pattern_dict = self.cluster_patterns()
+		working_patterns, idle_patterns, self.pattern_dict = self.cluster_patterns()
+		self.working_patterns = working_patterns
 		
 		### Looking for patterns that start and stop in the same state, and have less than 90% similarity
 		possible_patterns = []
@@ -212,8 +303,10 @@ class SequentialPatternMining:
 		p_dist = np.max(p_dist) - p_dist
 		
 		### Affinity Propagation
-		if preference != None:
+		if preference == 'percent_max':
 			ap = AffinityPropagation(affinity='precomputed',preference=0.9*np.max(p_dist))
+		elif preference == 'median':
+			ap = AffinityPropagation(affinity='precomputed')
 		else:
 			ap = AffinityPropagation(affinity='precomputed',preference=np.average(p_dist))
 		ap.fit(p_dist)
@@ -264,6 +357,9 @@ class SequentialPatternMining:
 		cl_mv_labels = ap_mv.fit_predict(p_dist)
 		cl_v_exs = [ cluster_mv[ind][1] for ind in ap_mv.cluster_centers_indices_]
 		idle_label = cl_mv_labels[cluster_mv_norm.index(min(cluster_mv_norm))]
+		self.idle_label = idle_label
+		max_label = cl_mv_labels[cluster_mv_norm.index(max(cluster_mv_norm))]
+		self.max_var_label = max_label
 		
 		### Classification based on variance of patterns, min_var -> idle, others-> working
 		working_patterns = []
@@ -287,6 +383,7 @@ class SequentialPatternMining:
 		### Printing values
 		print ('Final Number of Clusters: ', len(cluster_seqs))
 		print ('Idle Class: ', idle_label)
+		print ('Max Var Mean: ', max_label)
 		for k in cluster_seqs:
 			print (k)
 			print (cluster_seqs[k])
