@@ -41,16 +41,29 @@ def var_round(number):
 def get_data_files(path, day):
 	pattern = "*_*_*"	
 	files = []
-	got_file = False
+	# got_file = False
 	for root, dirs, fs in os.walk(path):
-		if fs and got_file == False:
+		if fs: # and got_file == False:
 			for f in fs:
 				if fnmatch.fnmatch(f,pattern):
 					files.append(os.path.join(root,f))
-				if day in f:
-					got_file = True
-					break
+				# if day in f:
+				# 	got_file = True
+				# 	break
 	return files
+
+	file_name = (datetime.strptime(date,"%Y-%m-%d").strftime("%Y_%m_%d")) + ".csv.gz"
+    pattern = "*_*_*"
+    files = []
+    for root, dirs, fs in os.walk(path):
+        if fs:
+            for f in fs:
+                if fnmatch.fnmatch(f, pattern):
+                    if(f <=  file_name):
+                        files.append(os.path.join(root,f))
+                    else:
+                        break
+    return files
 
 def get_full_data(files):
     values =[]
@@ -65,19 +78,6 @@ def get_full_data(files):
         values.extend(df2["VALUE"])
     return values
 
-
-    file_name = (datetime.strptime(date,"%Y-%m-%d").strftime("%Y_%m_%d")) + ".csv.gz"
-    pattern = "*_*_*"
-    files = []
-    for root, dirs, fs in os.walk(path):
-        if fs:
-            for f in fs:
-                if fnmatch.fnmatch(f, pattern):
-                    if(f <=  file_name):
-                        files.append(os.path.join(root,f))
-                    else:
-                        break
-    return files
 
 def get_resampled_data(files):
     interval = INTERVAL + "T"
