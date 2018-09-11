@@ -5,7 +5,7 @@ from sklearn.mixture import BayesianGaussianMixture
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import pattern_discovery
-import find_threshold 
+# import find_threshold 
 import pandas as pd 
 import numpy as np 
 import time
@@ -65,18 +65,21 @@ def lpf(data):
 def preprocess_power(f1, f2):
 	print ('Preprocessing files to extract data...')
 
-	df1 = pd.read_csv(f1)
-	df2 = pd.read_csv(f2)
-	df1.sort_values(by='TS')
-	df2.sort_values(by='TS')
-	df = pd.concat([df1,df2])
-	start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
-	end_time = datetime.isoformat(timedelta(days=1) + datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S'), sep=' ')
+	if f2 == None:
+		df = pd.read_csv(f1)
+		df.sort_values(by='TS')
+		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
+		end_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 11:59:59', '%Y_%m_%d %H:%M:%S'), sep=' ')
+	else:
+		df1 = pd.read_csv(f1)
+		df2 = pd.read_csv(f2)
+		df1.sort_values(by='TS')
+		df2.sort_values(by='TS')
+		df = pd.concat([df1,df2])
+		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
+		end_time = datetime.isoformat(timedelta(days=1) + datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S'), sep=' ')
 
 	df = df[(df['TS'] >= start_time) & (df['TS'] < end_time)]
-
-	df.to_csv('checking.csv')
-
 	df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
 
 	power = []
@@ -141,13 +144,15 @@ def peaks_to_discrete_states(final_peaks):
 
 	dpgmm = BayesianGaussianMixture(n_components=10,max_iter= 500,covariance_type='spherical').fit(X)
 	unordered_labels = dpgmm.predict(X)
+	original_means = [x[0] for x in dpgmm.means_]
 	sorted_means = sorted(dpgmm.means_, key=lambda x:x[0])
 	labels = [sorted_means.index(dpgmm.means_[l][0]) for l in unordered_labels]
 	states = np.unique(labels)
 
 	state_attributes = dict()
 	for s in states:
-		state_attributes.update({ str(s) : (dpgmm.means_[s][0], dpgmm.covariances_[s])}) # key should be string for json 
+		mean = sorted_means[s][0]
+		state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
 	
 	print ('Number of states: ', len(np.unique(labels)), states)
 	# print (dpgmm.means_)
@@ -223,7 +228,6 @@ if __name__ == '__main__':
 
 	######################
 	
-
 	####################### Filtering peaks with a threshold
 	# peak_pr = [round(p) for p in final_peaks]
 	# peak_threshold = find_threshold.get_otsus_threshold(peak_pr)
@@ -237,3 +241,5 @@ if __name__ == '__main__':
 	# print( 'Total Peaks Count: ', len(total_peaks))
 	
 	########################
+
+	
