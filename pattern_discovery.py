@@ -109,95 +109,6 @@ class SequentialPatternMining:
 						seq_support.append((seq, support))
 		return seq_support
 
-	def __get_max_var_pattern(self, list_seq):
-		seq_variances = []
-		for seq, support in list_seq:
-			var = np.std([self.state_attributes[str(s)][0] for s in seq])
-			seq_variances.append(var)
-		sorted_seq_variances = sorted(seq_variances, reverse=True)
-
-		for ind in range(len(list_seq)):
-			pattern_ind = seq_variances.index(sorted_seq_variances[ind])
-			req_pattern = list_seq[pattern_ind][0]
-			min_el = self.state_attributes[str(req_pattern[0])][0]
-			if all( self.state_attributes[str(s)][0] >= min_el for s in req_pattern):
-				return req_pattern
-
-		return None
-
-
-	def __get_most_common_subseq(self, possible_patterns):
-		if isinstance(possible_patterns[0], tuple):
-			possible_patterns = [seq[0] for seq in possible_patterns]
-		subseq_count = list(np.zeros(len(possible_patterns)))
-		for e,seq in enumerate(possible_patterns):
-			for seql in possible_patterns:
-				if seq_contains(seql, seq):
-					subseq_count[e] += 1
-
-		max_ind = subseq_count.index(max(subseq_count))
-
-		if all(c == max(subseq_count) for c in subseq_count):
-			return None
-		else:
-			return possible_patterns[max_ind]
-
-	# def __extend_pattern(self, root_pattern, bag_of_patterns):
-	# 	add_pattern = []
-	# 	for seq in bag_of_patterns:
-	# 		if seq[0][0] == final_pattern[-1] and not seq_contains(final_pattern, seq[0]):
-	# 			add_pattern.append(seq)
-
-	# 		if add_pattern:
-	# 			if len(add_pattern) > 1:
-	# 				clusters, exs = self.__dtw_clustering(add_pattern, preference='percent_max')
-	# 				print (clusters)
-	# 				print (exs)
-	# 				for e, extension in enumerate(exs):
-	# 					new_bag = list(bag_of_patterns)
-	# 					root_pattern.extend(extension[1:])
-	# 					print (root_pattern)
-	# 					for pattern in clusters[e]:
-	# 						new_bag.remove(pattern)
-
-	# 					if root_pattern[0] != root_pattern[-1] or len(root_pattern) < self.MAX_LEN_EXTENSION:
-	# 						root_pattern = self.__extend_pattern(root_pattern, new_bag)
-	# 					else:
-	# 						return root_pattern
-
-	# 			else:
-	# 				extension = add_pattern[0]
-	# 				print (add_pattern)
-	# 				print (extension)
-	# 				root_pattern.extend(extension[0][1:])
-	# 				print (final_pattern)
-	# 				bag_of_patterns.remove(extension)
-	# 				new_bag = bag_of_patterns
-
-	# 				if root_pattern[0] != root_pattern[-1] or len(root_pattern) < self.MAX_LEN_EXTENSION:
-	# 					root_pattern = self.__extend_pattern(root_pattern, new_bag)
-	# 				else:
-	# 					return root_pattern
-
-
-	# def __get_patterns_by_extension(self):
-	# 	max_var_patterns = [seq for seq in self.pattern_dict[self.max_var_label] if all(seq[0][0] <= s for s in seq[0])]
-	# 	if not max_var_patterns:
-	# 		return None
-
-	# 	bag_of_patterns = []
-	# 	for k, patterns in self.pattern_dict.items():
-	# 		if k != self.max_var_label or k != self.idle_label:
-	# 			bag_of_patterns.extend(patterns)
-
-	# 	_, roots = self.__dtw_clustering(max_var_patterns)
-
-	# 	final_pattern = []
-	# 	for root in roots:
-	# 		self.__extend_pattern(root, bag_of_patterns)
-
-
-
 	
 	def __get_pattern_by_extension(self, working_patterns):
 		add_pattern = None
@@ -212,22 +123,15 @@ class SequentialPatternMining:
 
 		elif len(init_patterns) > 1: 
 			_,roots_ex = self.__dtw_clustering(init_patterns, preference='jenks')
-			roots_var = [np.std([self.state_attributes[str(s)][0] for s in root]) for root in roots_ex]
-			if len(roots_ex) > 2:
-				var_th = self.__get_pref(roots_var)
-				roots = [roots_ex[e] for e,var in enumerate(roots_var) if var >= var_th]
-			else:
-				roots = [max(roots_ex, key = lambda x: np.std([self.state_attributes[str(s)][0] for s in x]))]
-				if round(roots_var[0]) == round(roots_var[1]):
-					roots = roots_ex
+			roots = roots_ex
 		else:
-			roots = list(init_patterns)
+			roots = [p[0] for p in init_patterns]
 		
 		print (roots)
 
 		final_patterns = []
 		for final_pattern in roots:
-			bag_of_patterns = [seq for seq in working_patterns if seq[0] != final_pattern]
+			bag_of_patterns = list([seq for seq in working_patterns if seq[0] != final_pattern])
 			
 			first_element = final_pattern[0]
 			look_from_here = len(final_pattern) - [final_pattern[i] for i in range(len(final_pattern)-1,-1,-1)].index(first_element)
@@ -275,16 +179,12 @@ class SequentialPatternMining:
 			else:
 				final_patterns.append(final_pattern[:end_ind])
 
-		## Checking if no exemplar is part of any other exemplar
-		for el in final_patterns:
-			for p in final_patterns:
-				if p != el:
-					if seq_contains(p,el) or self.__pattern_distance(p,el) == 0:
-						del final_patterns[final_patterns.index(el)]
-						break
-		print (final_patterns)
-
-		return final_patterns
+		## Clustering final results to avoid similar patterns
+		if len(final_patterns) > 1:
+			_, final_patterns_ex = self.__dtw_clustering(final_patterns, 'jenks')
+			return final_patterns_ex
+		else:
+			return final_patterns
 
 	def discover_pattern_by_extension(self):
 		try:
@@ -346,7 +246,10 @@ class SequentialPatternMining:
 		p_dist = np.zeros((len(seq_f), len(seq_f)))
 		for i in range(len(seq_f)):
 			for j in range(i,len(seq_f)):
-				p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0])
+				if isinstance(seq_f[i], list):
+					p_dist[i][j] = self.__pattern_distance(seq_f[i],seq_f[j])
+				else:
+					p_dist[i][j] = self.__pattern_distance(seq_f[i][0],seq_f[j][0])
 				if i != j:
 					p_dist[j][i] = p_dist[i][j]
 		
@@ -364,8 +267,13 @@ class SequentialPatternMining:
 			ap = AffinityPropagation(affinity='precomputed',preference=self.__get_pref(p_dist.flatten()))
 		else:
 			ap = AffinityPropagation(affinity='precomputed')
+		
 		ap.fit(p_dist)
-		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
+		
+		if isinstance(seq_f[0], list):
+			cluster_subseqs_exs = [ seq_f[ind] for ind in ap.cluster_centers_indices_]
+		else:
+			cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
 		
 		### Arranging sequences by cluster label 
 		cluster_subseqs = dict()
