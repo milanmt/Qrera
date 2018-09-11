@@ -35,9 +35,9 @@ class DTWClusteringError(Exception):
 class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes, peak_indices):
 		### Mining generative patterns only
-		self.MAX_LEN = 20
-		self.MIN_LEN = 5
-		self.MAX_LEN_EXTENSION = 40
+		self.MAX_LEN = 8
+		self.MIN_LEN = 3
+		self.MAX_LEN_EXTENSION = 10
 		self.MIN_SUPPORT = 0.3
 		self.LEN_SEGMENT = 600
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
@@ -54,6 +54,9 @@ class SequentialPatternMining:
 		self.max_var_label = None
 		self.idle_label = None
 	
+	def __get_pref(self, flat_array):
+		return jenkspy.jenks_breaks(flat_array, nb_class=2)[1]
+
 	def __pattern_distance(self,a,b):
 		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
 		val_b = np.array([self.state_attributes[str(s)][0] for s in b])
@@ -207,13 +210,18 @@ class SequentialPatternMining:
 		if not init_patterns:
 			return None
 
-		elif len(init_patterns) > 2: 
-			_,roots_ex = self.__dtw_clustering(init_patterns, preference='median')
-			roots_var = [np.std(root) for root in roots_ex]
-			var_th = jenkspy.jenks_breaks(roots_var, nb_class=2)[1]
-			roots = [roots_ex[e] for e,var in enumerate(roots_var) if var >= var_th]
+		elif len(init_patterns) > 1: 
+			_,roots_ex = self.__dtw_clustering(init_patterns, preference='jenks')
+			roots_var = [np.std([self.state_attributes[str(s)][0] for s in root]) for root in roots_ex]
+			if len(roots_ex) > 2:
+				var_th = self.__get_pref(roots_var)
+				roots = [roots_ex[e] for e,var in enumerate(roots_var) if var >= var_th]
+			else:
+				roots = [max(roots_ex, key = lambda x: np.std([self.state_attributes[str(s)][0] for s in x]))]
+				if round(roots_var[0]) == round(roots_var[1]):
+					roots = roots_ex
 		else:
-			roots = [p[0] for p in init_patterns]
+			roots = list(init_patterns)
 		
 		print (roots)
 
@@ -223,7 +231,8 @@ class SequentialPatternMining:
 			
 			first_element = final_pattern[0]
 			look_from_here = len(final_pattern) - [final_pattern[i] for i in range(len(final_pattern)-1,-1,-1)].index(first_element)
-			while(all(first_element < el for el in final_pattern[look_from_here:]) and len(final_pattern) < self.MAX_LEN_EXTENSION and bag_of_patterns):
+			max_limit_reached = False
+			while(all(first_element < el for el in final_pattern[look_from_here:]) and bag_of_patterns):
 				min_len = np.inf
 				add_pattern = [] 
 				for seq in bag_of_patterns:
@@ -232,7 +241,7 @@ class SequentialPatternMining:
 
 				if add_pattern:
 					if len(add_pattern) > 1:
-						clusters, exs = self.__dtw_clustering(add_pattern, preference='percent_max')
+						clusters, exs = self.__dtw_clustering(add_pattern, preference='jenks')
 						print (clusters)
 						print (exs)
 						ext_ind = max(clusters.keys(), key=lambda x: sum([p[1] for p in clusters[x]]))
@@ -255,8 +264,25 @@ class SequentialPatternMining:
 				else:
 					final_patterns.append(final_pattern)
 
+				if len(final_pattern) >= self.MAX_LEN_EXTENSION:
+					max_limit_reached = True
+					break
+
 			end_ind = len(final_pattern) - [final_pattern[i] for i in range(len(final_pattern)-1,-1,-1)].index(first_element)
-			final_patterns.append(final_pattern[:end_ind])
+			
+			if max_limit_reached:
+				final_patterns.append(final_pattern)
+			else:
+				final_patterns.append(final_pattern[:end_ind])
+
+		## Checking if no exemplar is part of any other exemplar
+		for el in final_patterns:
+			for p in final_patterns:
+				if p != el:
+					if seq_contains(p,el) or self.__pattern_distance(p,el) == 0:
+						del final_patterns[final_patterns.index(el)]
+						break
+		print (final_patterns)
 
 		return final_patterns
 
@@ -289,7 +315,7 @@ class SequentialPatternMining:
 	
 		### Clustering with DTW to find patterns. Exemplars -> final patterns 
 		if len(possible_patterns) > 1:
-			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, preference='percent_max')
+			different_patterns, exemplars = self.__dtw_clustering(possible_patterns, preference='jenks')
 			
 			# print (exemplars)
 			print (different_patterns)
@@ -300,7 +326,7 @@ class SequentialPatternMining:
 				for el in exemplars:
 					for p in exemplars:
 						if p != el:
-							if seq_contains(p,el):
+							if seq_contains(p,el) or self.__pattern_distance(p,el) == 0:
 								del exemplars[exemplars.index(el)]
 								break
 				print (exemplars)
@@ -334,10 +360,10 @@ class SequentialPatternMining:
 		### Affinity Propagation
 		if preference == 'percent_max':
 			ap = AffinityPropagation(affinity='precomputed',preference=0.9*p_dist_max)
-		elif preference == 'median':
-			ap = AffinityPropagation(affinity='precomputed')
+		elif preference == 'jenks':
+			ap = AffinityPropagation(affinity='precomputed',preference=self.__get_pref(p_dist.flatten()))
 		else:
-			ap = AffinityPropagation(affinity='precomputed',preference=np.average(p_dist))
+			ap = AffinityPropagation(affinity='precomputed')
 		ap.fit(p_dist)
 		cluster_subseqs_exs = [ seq_f[ind][0] for ind in ap.cluster_centers_indices_]
 		
@@ -357,7 +383,7 @@ class SequentialPatternMining:
 	def cluster_patterns(self):
 		seq_f =  self.generator_patterns
 		### Clustering sequences using dtw and affinity propagation
-		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
+		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f, preference='jenks')
 		print ('Number of clusters with DTW: ', len(cluster_subseqs))
 		if len(cluster_subseqs) == 1:
 			raise DTWClusteringError('Incorrect Clustering -> Minimum No. Of Clusters Not Found')
