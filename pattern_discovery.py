@@ -35,9 +35,9 @@ class DTWClusteringError(Exception):
 class SequentialPatternMining:
 	def __init__(self, sequence, state_attributes, peak_indices):
 		### Mining generative patterns only
-		self.MAX_LEN = 8
-		self.MIN_LEN = 3
-		self.MAX_LEN_EXTENSION = 10
+		self.MAX_LEN = 20
+		self.MIN_LEN = 5
+		self.MAX_LEN_EXTENSION = 15
 		self.MIN_SUPPORT = 0.3
 		self.LEN_SEGMENT = 600
 		self.sequence = list(sequence) if not isinstance(sequence, list) else sequence
@@ -134,7 +134,7 @@ class SequentialPatternMining:
 			bag_of_patterns = list([seq for seq in working_patterns if seq[0] != final_pattern])
 			
 			first_element = final_pattern[0]
-			look_from_here = len(final_pattern) - [final_pattern[i] for i in range(len(final_pattern)-1,-1,-1)].index(first_element)
+			look_from_here = len(final_pattern) - list(reversed(final_pattern)).index(first_element)
 			max_limit_reached = False
 			while(all(first_element < el for el in final_pattern[look_from_here:]) and bag_of_patterns):
 				min_len = np.inf
@@ -172,7 +172,7 @@ class SequentialPatternMining:
 					max_limit_reached = True
 					break
 
-			end_ind = len(final_pattern) - [final_pattern[i] for i in range(len(final_pattern)-1,-1,-1)].index(first_element)
+			end_ind = len(final_pattern) - list(reversed(final_pattern)).index(first_element)
 			
 			if max_limit_reached:
 				final_patterns.append(final_pattern)
