@@ -10,7 +10,6 @@ import os
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
-		
 		t0= time.time()
 		func_val = func(*args,**kwargs)
 		time_taken = time.time() - t0
@@ -18,8 +17,8 @@ def timing_wrapper(func):
 		print (str(func),' took: ', time_taken)
 
 		return func_val
-
 	return wrapper
+
 
 def get_required_files(device_path, day):
 	print ('Obtaining Required Files...')
@@ -40,7 +39,6 @@ def get_required_files(device_path, day):
 
 
 class PatternMining:
-
 	def __init__(self, sequence, state_attributes):
 		self.sequence = sequence
 		self.MAX_LEN = 10
@@ -48,7 +46,6 @@ class PatternMining:
 		self.state_attributes = state_attributes
 		self.min_states, self.max_states = self.__partition_states()
 		self.pattern_sets = []
-
 
 	def __partition_states(self):
 		seq_means = [self.state_attributes[str(s)][0] for s in self.sequence]
@@ -86,9 +83,6 @@ class PatternMining:
 					else:
 						p_set.append(p)
 
-		# for p_set in self.pattern_sets:
-		# 	print (p_set[0], len(p_set))
-
 		print ('Total Unique Patterns: ', len(self.pattern_sets))
 		return self.pattern_sets
 
@@ -103,19 +97,4 @@ class PatternMining:
 		val_b = np.array([self.state_attributes[str(s)][0] for s in pattern])
 		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
 		return dist
-
-if __name__ == '__main__':
-
-	# device_path = '/media/milan/DATA/Qrera/HiraAutomation/B4E62D388226'
-	# day = '2018_06_25'
-	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_06'
-	file1, file2 = get_required_files(device_path, day)
-	power_d, power_f = pd.preprocess_power(file1, file2)
-	final_peaks, peak_indices = pd.detect_peaks(power_d, power_f)
-	array, state_attributes = pd.peaks_to_discrete_states(final_peaks)
-
-	pm = PatternMining(array,state_attributes)
-	print (pm.min_states, 'min')
-	print (pm.max_states, 'max')
-	pm.find_patterns()
+		
