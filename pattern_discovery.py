@@ -3,6 +3,7 @@
 from scipy.spatial.distance import pdist, squareform
 from sklearn.mixture import BayesianGaussianMixture
 from sklearn.cluster import AffinityPropagation
+import custompattern_mining as cpm
 import matplotlib.pyplot as plt 
 from dtw import dtw
 import numpy as np
@@ -92,21 +93,25 @@ class SequentialPatternMining:
 
 	@timing_wrapper
 	def __get_all_freq_seq(self):
-		self.__pattern_mining()
-		seq_support = []
-		with open(self.pattern_filename, 'r') as f:
-			for line in f:
-				if '-1' in line:
-					temp_l = line.split(' -1 ')
-					seq = []
-					support = 0 
-					for s in temp_l:
-						if '#SUP' in s:
-							support = int(s.split(':')[1].strip())
-						else:
-							seq.append(int(s))
-					if len(seq) >= self.MIN_LEN:
-						seq_support.append((seq, support))
+		# self.__pattern_mining()
+		# seq_support = []
+		# with open(self.pattern_filename, 'r') as f:
+		# 	for line in f:
+		# 		if '-1' in line:
+		# 			temp_l = line.split(' -1 ')
+		# 			seq = []
+		# 			support = 0 
+		# 			for s in temp_l:
+		# 				if '#SUP' in s:
+		# 					support = int(s.split(':')[1].strip())
+		# 				else:
+		# 					seq.append(int(s))
+		# 			if len(seq) >= self.MIN_LEN:
+		# 				seq_support.append((seq, support))
+
+		cpm_pm = cpm.PatternMining(self.sequence, self.state_attributes)
+		pattern_sets = cpm_pm.find_patterns()
+		seq_support = [(p_set[0], len(p_set)) for p_set in pattern_sets]
 		return seq_support
 
 	
