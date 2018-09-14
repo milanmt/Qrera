@@ -19,25 +19,6 @@ def timing_wrapper(func):
 		return func_val
 	return wrapper
 
-
-def get_required_files(device_path, day):
-	print ('Obtaining Required Files...')
-	file1 = None
-	file2 = None
-	end_search = False
-	for root, dirs, files in os.walk(device_path):
-		if files and not end_search:
-			files.sort()
-			for f in files:
-				if day in f and f.endswith('.csv.gz'):
-					file1 = os.path.join(root,f)
-				if file1 and os.path.join(root,f) > file1:
-					file2 =  os.path.join(root,f)
-					end_search = True
-					break
-	return file1, file2
-
-
 class PatternMining:
 	def __init__(self, sequence, state_attributes):
 		self.sequence = sequence
@@ -97,4 +78,3 @@ class PatternMining:
 		val_b = np.array([self.state_attributes[str(s)][0] for s in pattern])
 		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
 		return dist
-		
