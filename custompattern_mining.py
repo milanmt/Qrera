@@ -20,10 +20,10 @@ def timing_wrapper(func):
 	return wrapper
 
 class PatternMining:
-	def __init__(self, sequence, state_attributes):
+	def __init__(self, sequence, state_attributes, max_len, min_len):
 		self.sequence = sequence
-		self.MAX_LEN = 10
-		self.MIN_LEN = 3
+		self.MAX_LEN = max_len
+		self.MIN_LEN = min_len
 		self.state_attributes = state_attributes
 		self.min_states, self.max_states = self.__partition_states()
 		self.pattern_sets = []

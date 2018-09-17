@@ -33,7 +33,7 @@ class DTWClusteringError(Exception):
 	pass
 
 class PatternDiscovery:
-	def __init__ (self, sequence, state_attributes,):
+	def __init__ (self, sequence, state_attributes,similarity_constraint=0.9):
 		self.state_attributes = state_attributes
 		self.pm = cpm.PatternMining(sequence, state_attributes)
 		self.patterns = self.__get_patterns()
@@ -41,7 +41,7 @@ class PatternDiscovery:
 		self.idle_label = None
 		self.pattern_dict = None
 		self.working_patterns = None
-		self.similarity_constraint = 0.9  ## No single element can appear more than 100x% of the time
+		self.similarity_constraint = similarity_constraint  ## No single element can appear more than 100x% of the time
 
 	def __get_patterns(self):
 		pattern_sets = self.pm.find_patterns()
