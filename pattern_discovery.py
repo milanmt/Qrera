@@ -183,13 +183,6 @@ class PatternDiscovery:
 			print (different_patterns)
 			print ('Number of clusters with DTW: ', len(different_patterns))
 			
-			## Checking if no exemplar is part of any other exemplar
-			for el in exemplars:
-				for p in exemplars:
-					if p != el:
-						if seq_contains(p,el) or self.__pattern_distance(p,el) == 0:
-							del exemplars[exemplars.index(el)]
-							break
 			print (exemplars)
 			return exemplars
 		else:
