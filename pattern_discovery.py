@@ -15,7 +15,6 @@ def timing_wrapper(func):
 		time_taken = time.time() - t0
 
 		print (str(func),' took: ', time_taken)
-
 		return func_val
 	return wrapper
 
@@ -181,7 +180,7 @@ class PatternDiscovery:
 		val_b = np.array([self.state_attributes[str(s)][0] for s in b])
 		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
 		return dist 
-	
+
 
 def seq_contains(seq, subseq):
 	seq_s = str()
