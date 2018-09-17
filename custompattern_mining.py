@@ -24,7 +24,7 @@ class PatternMining:
 		self.sequence = sequence
 		self.MAX_LEN = max_len
 		self.MIN_LEN = min_len
-		if min_len > max_len:
+		if min_len >= max_len:
 			raise ValueError('Incorrect values for minimum and maximum length of required pattern')
 		self.state_attributes = state_attributes
 		self.min_states, self.max_states = self.__partition_states()
@@ -49,9 +49,7 @@ class PatternMining:
 		for init_ind in range(len(self.sequence)):
 			
 			if self.sequence[init_ind] in self.min_states:
-				print (init_ind)
 				p_temp = self.sequence[init_ind:init_ind+self.MAX_LEN]
-				print (p_temp)
 				try:
 					end_ind = self.MIN_LEN + p_temp[self.MIN_LEN:].index(p_temp[0])+1
 				except ValueError:
