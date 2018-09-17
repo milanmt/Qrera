@@ -171,25 +171,25 @@ class PatternDiscovery:
 		### Looking for patterns that start and stop in the same state, and have less than 90% similarity
 		possible_patterns = []
 		for seq in working_patterns:
-			if seq[0][0] == seq[0][-1]:
-				if all( self.state_attributes[str(s)][0] >= self.state_attributes[str(seq[0][0])][0] for s in seq[0]):
-					_, count = np.unique(seq[0], return_counts=True)
-					count = count/sum(count)
-					if all(c < self.similarity_constraint for c in count):
-						possible_patterns.append(seq)
-	
+			if all( self.state_attributes[str(s)][0] >= self.state_attributes[str(seq[0][0])][0] for s in seq[0]):
+				_, count = np.unique(seq[0], return_counts=True)
+				count = count/sum(count)
+				if all(c < self.similarity_constraint for c in count):
+					possible_patterns.append(seq)
+		
 		### Clustering with DTW to find patterns. Exemplars -> final patterns 
 		if len(possible_patterns) > 1:
 			different_patterns, exemplars = self.__dtw_clustering(possible_patterns)
-			# print (exemplars)
 			print (different_patterns)
 			print ('Number of clusters with DTW: ', len(different_patterns))
-			
 			print (exemplars)
 			return exemplars
-		else:
+		elif len(possible_patterns) == 1:
 			## If no such pattern exists, extend patterns that gives likely output
-			return possible_patterns[0]
+			print( possible_patterns[0][0])
+			return possible_patterns[0][0]
+		else:
+			return None
 
 	def __pattern_distance(self,a,b):
 		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
