@@ -160,6 +160,8 @@ class PatternDiscovery:
 
 	@timing_wrapper
 	def discover_pattern(self):
+		if len(self.patterns) == 1:
+			return self.patterns[0][0]
 		try:
 			working_patterns, idle_patterns, self.pattern_dict = self.cluster_patterns()
 			self.working_patterns = working_patterns
