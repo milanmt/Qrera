@@ -33,9 +33,9 @@ class DTWClusteringError(Exception):
 	pass
 
 class PatternDiscovery:
-	def __init__ (self, sequence, state_attributes,max_len, min_len, similarity_constraint=0.9):
+	def __init__ (self, sequence, state_attributes,min_len, max_len, similarity_constraint=0.9):
 		self.state_attributes = state_attributes
-		self.pm = cpm.PatternMining(sequence, state_attributes, max_len, min_len)
+		self.pm = cpm.PatternMining(sequence, state_attributes, min_len, max_len)
 		self.patterns = self.__get_patterns()
 		self.max_var_label = None
 		self.idle_label = None

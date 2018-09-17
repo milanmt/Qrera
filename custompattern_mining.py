@@ -20,10 +20,12 @@ def timing_wrapper(func):
 	return wrapper
 
 class PatternMining:
-	def __init__(self, sequence, state_attributes, max_len, min_len):
+	def __init__(self, sequence, state_attributes, min_len, max_len):
 		self.sequence = sequence
 		self.MAX_LEN = max_len
 		self.MIN_LEN = min_len
+		if min_len > max_len:
+			raise ValueError('Incorrect values for minimum and maximum length of required pattern')
 		self.state_attributes = state_attributes
 		self.min_states, self.max_states = self.__partition_states()
 		self.pattern_sets = []
@@ -42,13 +44,14 @@ class PatternMining:
 
 	@timing_wrapper
 	def find_patterns(self):
-		### Looking for pattterns that start and stop with all possible min states.
+		### Looking for patterns that start and stop with all possible min states.
 		print ('Mining Required Patterns...')
 		for init_ind in range(len(self.sequence)):
-			# print (init_ind)
+			
 			if self.sequence[init_ind] in self.min_states:
+				print (init_ind)
 				p_temp = self.sequence[init_ind:init_ind+self.MAX_LEN]
-				
+				print (p_temp)
 				try:
 					end_ind = self.MIN_LEN + p_temp[self.MIN_LEN:].index(p_temp[0])+1
 				except ValueError:
@@ -65,6 +68,8 @@ class PatternMining:
 						p_set.append(p)
 
 		print ('Total Unique Patterns: ', len(self.pattern_sets))
+		if len(self.pattern_sets) == 0:
+			raise 
 		return self.pattern_sets
 
 	def __patternset_list_contains(self, pattern):
