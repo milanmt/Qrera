@@ -1,19 +1,11 @@
 #! /usr/bin/env python3
 
 from scipy.spatial.distance import pdist, squareform
-from sklearn.mixture import BayesianGaussianMixture
 from sklearn.cluster import AffinityPropagation
 import custompattern_mining as cpm
-import matplotlib.pyplot as plt 
 from dtw import dtw
 import numpy as np
-import subprocess
-import jenkspy 
-import pandas 
-import json
 import time
-import math
-import os
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -25,15 +17,11 @@ def timing_wrapper(func):
 		print (str(func),' took: ', time_taken)
 
 		return func_val
-
 	return wrapper
 
-class DTWClusteringError(Exception):
-	### Raised when DTW clustering could not find required clusters.
-	pass
 
 class PatternDiscovery:
-	def __init__ (self, sequence, state_attributes,min_len, max_len, similarity_constraint=0.9):
+	def __init__ (self, sequence, state_attributes,min_len, max_len):
 		self.state_attributes = state_attributes
 		self.pm = cpm.PatternMining(sequence, state_attributes, min_len, max_len)
 		self.patterns = self.__get_patterns()
@@ -41,8 +29,8 @@ class PatternDiscovery:
 		self.idle_label = None
 		self.pattern_dict = None
 		self.working_patterns = None
-		self.similarity_constraint = similarity_constraint  ## No single element can appear more than 100x% of the time
-
+		self.idle_patterns = None
+		
 	def __get_patterns(self):
 		pattern_sets = self.pm.find_patterns()
 		seq_support = [(p_set[0], len(p_set)) for p_set in pattern_sets]
@@ -88,15 +76,13 @@ class PatternDiscovery:
 		return cluster_subseqs, cluster_subseqs_exs
 
 	@timing_wrapper
-	def cluster_patterns(self):
-		seq_f =  self.patterns
+	def cluster_patterns(self, seq_f):
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
 		print ('Number of clusters with DTW: ', len(cluster_subseqs))
 		if len(cluster_subseqs) == 1:
-			raise DTWClusteringError('Incorrect Clustering -> Minimum No. Of Clusters Not Found')
-		# print (cluster_subseqs)
-
+			return cluster_subseqs, None, None			
+		
 		### Getting average variances and means of exemplars for classification
 		cluster_mv = np.zeros((len(cluster_subseqs),2))
 		cluster_mv_norm = list(np.zeros(len(cluster_subseqs)))
@@ -129,14 +115,14 @@ class PatternDiscovery:
 		max_label = cl_mv_labels[cluster_mv_norm.index(max(cluster_mv_norm))]
 		self.max_var_label = max_label
 		
-		### Classification based on variance of patterns, min_var -> idle, others-> working
+		### Classification based on variance of patterns, min_var -> idle, other exemplars-> working
 		working_patterns = []
 		idle_patterns = []
 		for e,l in enumerate(cl_mv_labels):
 			if l == idle_label:
-				idle_patterns.extend(cluster_subseqs[e])
+				idle_patterns.append(cluster_subseqs_exs[e])
 			else:
-				working_patterns.extend(cluster_subseqs[e])
+				working_patterns.append(cluster_subseqs_exs[e])
 
 		### Grouping sequences by cluster label -> later inference 
 		cluster_seqs = dict()
@@ -146,8 +132,7 @@ class PatternDiscovery:
 			else:
 				seq_list = cluster_seqs[label]
 				seq_list.extend(cluster_subseqs[e])
-				cluster_seqs.update({ label: seq_list})
-		
+				
 		### Printing values
 		print ('Final Number of Clusters: ', len(cluster_seqs))
 		print ('Idle Class: ', idle_label)
@@ -156,38 +141,38 @@ class PatternDiscovery:
 			print (k)
 			print (cluster_seqs[k])
 		
-		return working_patterns, idle_patterns, cluster_seqs 
+		return cluster_seqs, working_patterns, idle_patterns 
 
 	@timing_wrapper
 	def discover_pattern(self):
 		if len(self.patterns) == 1:
 			return self.patterns[0][0]
-		try:
-			working_patterns, idle_patterns, self.pattern_dict = self.cluster_patterns()
-			self.working_patterns = working_patterns
-		except DTWClusteringError:
-			return None
 		
-		### Looking for patterns that start and stop in the same state, and have less than 90% similarity
+		### Looking for signals which start and stop with minimas 
 		possible_patterns = []
-		for seq in working_patterns:
+		for seq in self.patterns:
 			if all( self.state_attributes[str(s)][0] >= self.state_attributes[str(seq[0][0])][0] for s in seq[0]):
-				_, count = np.unique(seq[0], return_counts=True)
-				count = count/sum(count)
-				if all(c < self.similarity_constraint for c in count):
-					possible_patterns.append(seq)
+				possible_patterns.append(seq)
 		
-		### Clustering with DTW to find patterns. Exemplars -> final patterns 
+		### Clustering with DTW to find patterns. Exemplars from DTW -> final patterns 
+		### These clustered based on mean and variance to identify idle and working patterns
 		if len(possible_patterns) > 1:
-			different_patterns, exemplars = self.__dtw_clustering(possible_patterns)
-			print (different_patterns)
-			print ('Number of clusters with DTW: ', len(different_patterns))
-			print (exemplars)
-			return exemplars
+			self.pattern_dict, self.working_patterns, self.idle_patterns= self.cluster_patterns(possible_patterns)
+			final_patterns = []
+			if self.working_patterns == None:
+				for p_set in pattern_dict.values():
+					for p in p_set:
+						final_patterns.append(p)
+			else:
+				for p in self.working_patterns:
+					final_patterns.append(p)
+
+			print (final_patterns)
+			return final_patterns
+		
 		elif len(possible_patterns) == 1:
-			## If no such pattern exists, extend patterns that gives likely output
 			print( possible_patterns[0][0])
-			return possible_patterns[0][0]
+			return [possible_patterns[0][0]]
 		else:
 			return None
 
@@ -197,6 +182,7 @@ class PatternDiscovery:
 		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
 		return dist 
 	
+
 def seq_contains(seq, subseq):
 	seq_s = str()
 	for x in seq:
