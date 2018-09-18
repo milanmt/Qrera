@@ -1,7 +1,19 @@
 #! /usr/bin/env python3
 
+
 from dtw import dtw
 import numpy as np
+
+
+
+def timing_wrapper(func):
+	def wrapper(*args,**kwargs):
+		t0= time.time()
+		func_val = func(*args,**kwargs)
+		time_taken = time.time() - t0
+		print (str(func),' took: ', time_taken)
+		return func_val
+	return wrapper
 
 class PatternMatching:
 	def __init__(self, pattern_dict, state_attributes, sequence, max_len):
@@ -11,6 +23,7 @@ class PatternMatching:
 		self.pattern_sequence = None
 		self.max_len = max_len
 
+	@timing_wrapper
 	def find_matches(self):
 		start_ind = 0
 		end_ind = 0
@@ -44,7 +57,6 @@ class PatternMatching:
 			start_ind = end_ind - 1
 
 		self.pattern_sequence = pattern_sequence
-
 		### Counting unique values
 		vals, counts = np.unique(pattern_sequence, return_counts=True)
 		print (vals)
