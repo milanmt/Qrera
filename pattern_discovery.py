@@ -27,6 +27,7 @@ class PatternDiscovery:
 		self.max_var_label = None
 		self.idle_label = None
 		self.pattern_dict = None
+		self.pattern_dict_exs = None
 		self.working_patterns = None
 		self.idle_patterns = None
 		
@@ -80,7 +81,7 @@ class PatternDiscovery:
 		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
 		print ('Number of clusters with DTW: ', len(cluster_subseqs))
 		if len(cluster_subseqs) == 1:
-			return cluster_subseqs, None, None			
+			return cluster_subseqs, cluster_subseqs_exs, None, None			
 		
 		### Getting average variances and means of exemplars for classification
 		cluster_mv = np.zeros((len(cluster_subseqs),2))
@@ -125,12 +126,16 @@ class PatternDiscovery:
 
 		### Grouping sequences by cluster label -> later inference 
 		cluster_seqs = dict()
+		cluster_seqs_exs = dict()
 		for e,label in enumerate(cl_mv_labels):
 			if label not in cluster_seqs:
 				cluster_seqs.update({label : cluster_subseqs[e]})
+				cluster_seqs_exs.update({label : cluster_subseqs_exs[e]})
 			else:
 				seq_list = cluster_seqs[label]
+				ex_list = cluster_seqs_exs[label]
 				seq_list.extend(cluster_subseqs[e])
+				ex_list.append(cluster_subseqs_exs[e])
 				
 		### Printing values
 		print ('Final Number of Clusters: ', len(cluster_seqs))
@@ -138,13 +143,17 @@ class PatternDiscovery:
 		print ('Max Var Mean: ', max_label)
 		for k in cluster_seqs:
 			print (k)
+			print ('orig')
 			print (cluster_seqs[k])
+			print ('ex')
+			print (cluster_seqs_exs[k])
 		
-		return cluster_seqs, working_patterns, idle_patterns 
+		return cluster_seqs, cluster_seqs_exs, working_patterns, idle_patterns 
 
 	@timing_wrapper
 	def discover_pattern(self):
 		if len(self.patterns) == 1:
+			self.pattern_dict = {0: [self.patterns[0]]}
 			return self.patterns[0][0]
 		
 		### Looking for signals which start and stop with minimas 
@@ -156,10 +165,10 @@ class PatternDiscovery:
 		### Clustering with DTW to find patterns. Exemplars from DTW -> final patterns 
 		### These clustered based on mean and variance to identify idle and working patterns
 		if len(possible_patterns) > 1:
-			self.pattern_dict, self.working_patterns, self.idle_patterns= self.cluster_patterns(possible_patterns)
+			self.pattern_dict, self.pattern_dict_exs, self.working_patterns, self.idle_patterns= self.cluster_patterns(possible_patterns)
 			final_patterns = []
 			if self.working_patterns == None:
-				for p_set in pattern_dict.values():
+				for p_set in self.pattern_dict.values():
 					for p in p_set:
 						final_patterns.append(p)
 			else:
@@ -170,6 +179,7 @@ class PatternDiscovery:
 			return final_patterns
 		
 		elif len(possible_patterns) == 1:
+			self.pattern_dict = {0: [self.patterns[0]]}
 			print( possible_patterns[0][0])
 			return [possible_patterns[0][0]]
 		else:
