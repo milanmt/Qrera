@@ -1,9 +1,8 @@
 #! /usr/bin/env python3
 
-
 from dtw import dtw
 import numpy as np
-
+import time
 
 
 def timing_wrapper(func):
@@ -21,13 +20,16 @@ class PatternMatching:
 		self.sequence = sequence
 		self.state_attributes = state_attributes
 		self.pattern_sequence = None
+		self.pattern_sequence_indices = None
 		self.max_len = max_len
 
 	@timing_wrapper
 	def find_matches(self):
+		print ('Matching Discovered Patterns...')
 		start_ind = 0
 		end_ind = 0
 		pattern_sequence = []
+		pattern_sequence_indices = []
 		while start_ind < len(self.sequence)-1:
 			min_pdist = np.inf
 			for label, p_set in self.pattern_dict.items():
@@ -54,14 +56,17 @@ class PatternMatching:
 						req_label = label
 
 			pattern_sequence.append(req_label)
+			if end_ind < len(self.sequence):
+				pattern_sequence_indices.append(end_ind)
 			start_ind = end_ind - 1
 
 		self.pattern_sequence = pattern_sequence
+		self.pattern_sequence_indices = pattern_sequence_indices
 		### Counting unique values
 		vals, counts = np.unique(pattern_sequence, return_counts=True)
 		print (vals)
 		print (counts)
-		return pattern_sequence
+		return pattern_sequence, pattern_sequence_indices
 
 	def __pattern_distance(self,a,b):
 		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
