@@ -61,20 +61,19 @@ if __name__ == '__main__':
 
 	print ('Mapping time indices...')
 	simplified_seq = np.zeros((len(power_f)))
+	start_ind = 0
 	for e,i in enumerate(p_indices):
-		simplified_seq[:peak_indices[i]] = p_array[e]
-
+		simplified_seq[start_ind:peak_indices[i]] = p_array[e]
+		start_ind = peak_indices[i]
+	
 	print ('Plotting...')
 	unique_labels = np.unique(simplified_seq)
 	y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
 	for e,el in enumerate(simplified_seq):
-		print (y_plot[el,e])
-		print (power_f[e])
-		y_plot[el,e] = power_f[e]
-		print (y_plot[el,e])
+		y_plot[int(el),e] = power_f[e]
 	time = np.arange(len(power_f))
-
+	
 	plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
-	data = [go.Scatter(x=time, y=y_plot[i,:]) for i in unique_labels]
+	data = [go.Scatter(x=time, y=y_plot[int(i),:]) for i in unique_labels]
 	fig = go.Figure(data = data)
 	plotly.plotly.plot(fig, filename='qrera_pattern_counting')
