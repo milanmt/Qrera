@@ -4,11 +4,10 @@ import custompattern_mining as cpm
 import pattern_discovery as ptd
 import matplotlib.pyplot as plt
 import pattern_matching as ptm
+import plotly.graph_objs as go
 import peak_detector as pd 
-from dtw import dtw
 import numpy as np
-import subprocess
-import pandas 
+import plotly
 import json
 import os
 
@@ -30,12 +29,7 @@ def get_required_files(device_path, day):
 					break
 	return file1, file2
 
-
-
 if __name__ == '__main__':
-	
-	# array = [1, 2, 3, 3, 1, 2, 3, 5, 1, 2, 3, 1, 2, 3,5, 5, 5, 5, 1, 2, 2, 1, 2, 2, 3, 5, 1, 2, 3, 5, 5, 1, 1, 2, 2, 3, 3, 5, 1, 2, 3, 5]
-
 	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
 	day = '2018_07_18'
 	# device_path = '/media/milan/DATA/Qrera/HiraAutomation/B4E62D388226'
@@ -63,11 +57,24 @@ if __name__ == '__main__':
 			raise ValueError('Could not find valid pattern. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')
 
 	p_m = ptm.PatternMatching(pm.pattern_dict, state_attributes, array, 10)
-	p_array = p_m.find_matches()
+	p_array, p_indices = p_m.find_matches()
 
-	# with open('state_attributes.json', 'r') as f:
-	# 	state_attributes = json.load(f)
-	
-	# pattern = [1,2,3,5,1]
+	print ('Mapping time indices...')
+	simplified_seq = np.zeros((len(power_f)))
+	for e,i in enumerate(p_indices):
+		simplified_seq[:peak_indices[i]] = p_array[e]
 
-	# pattern_recognition(array, pattern, state_attributes)
+	print ('Plotting...')
+	unique_labels = np.unique(simplified_seq)
+	y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
+	for e,el in enumerate(simplified_seq):
+		print (y_plot[el,e])
+		print (power_f[e])
+		y_plot[el,e] = power_f[e]
+		print (y_plot[el,e])
+	time = np.arange(len(power_f))
+
+	plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
+	data = [go.Scatter(x=time, y=y_plot[i,:]) for i in unique_labels]
+	fig = go.Figure(data = data)
+	plotly.plotly.plot(fig, filename='qrera_pattern_counting')
