@@ -45,10 +45,8 @@ class PatternMatching:
 						end_ind_t +=1
 
 					min_dist = min(dists)
-					max_end = -1
-					for e,dist in enumerate(dists):
-						if dist == min_dist and ends[e] > max_end:
-							end_ind_f = ends[e]
+					min_dist_ind = dists.index(min_dist)
+					end_ind_f = ends[min_dist_ind]
 
 					if min_pdist > min_dist:
 						min_pdist = min_dist
