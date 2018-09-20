@@ -129,8 +129,8 @@ class PatternDiscovery:
 		cluster_seqs_exs = dict()
 		for e,label in enumerate(cl_mv_labels):
 			if label not in cluster_seqs:
-				cluster_seqs.update({label : cluster_subseqs[e]})
-				cluster_seqs_exs.update({label : cluster_subseqs_exs[e]})
+				cluster_seqs.update({label : list(cluster_subseqs[e])})
+				cluster_seqs_exs.update({label : [cluster_subseqs_exs[e]]})
 			else:
 				seq_list = cluster_seqs[label]
 				ex_list = cluster_seqs_exs[label]
@@ -143,10 +143,10 @@ class PatternDiscovery:
 		print ('Max Var Mean: ', max_label)
 		for k in cluster_seqs:
 			print (k)
-			print ('orig')
+			# print ('orig')
 			print (cluster_seqs[k])
-			print ('ex')
-			print (cluster_seqs_exs[k])
+			# print ('ex')
+			# print (cluster_seqs_exs[k])
 		
 		return cluster_seqs, cluster_seqs_exs, working_patterns, idle_patterns 
 
@@ -170,7 +170,7 @@ class PatternDiscovery:
 			if self.working_patterns == None:
 				for p_set in self.pattern_dict.values():
 					for p in p_set:
-						final_patterns.append(p)
+						final_patterns.append(p[0])
 			else:
 				for p in self.working_patterns:
 					final_patterns.append(p)
