@@ -20,44 +20,62 @@ def timing_wrapper(func):
 	return wrapper
 
 class PatternMining:
-	def __init__(self, sequence, state_attributes, min_len, max_len):
+	def __init__(self, sequence, state_attributes, max_len):
 		self.sequence = sequence
-		self.MAX_LEN = max_len
-		self.MIN_LEN = min_len
-		if min_len >= max_len:
-			raise ValueError('Incorrect values for minimum and maximum length of required pattern')
+		self.MAX_LEN = max_len   ## Max len should be greater than longest possible pattern
 		self.state_attributes = state_attributes
 		self.min_states, self.max_states = self.__partition_states()
 		self.pattern_sets = []
 
 	def __partition_states(self):
-		seq_means = [self.state_attributes[str(s)][0] for s in self.sequence]
+		seq_means = [s[0] for s in self.state_attributes.values()]
+		print (seq_means)
 		mean_th = jenkspy.jenks_breaks(seq_means, nb_class=2)[1]
 		max_states = []
 		min_states = []
 		for state, attributes in self.state_attributes.items():
-			if attributes[0] >= mean_th:
+			if attributes[0] > mean_th:
 				max_states.append(int(state))
 			else:
 				min_states.append(int(state))
+		print (max_states)
+		print (min_states)
 		return min_states, max_states
+
+	
+	def __get_end_ind(self, p_temp):
+		start = 0
+		for i in range(1,len(p_temp)):
+			if p_temp[0] != p_temp[i]:
+				start = i
+				break
+
+		if start == 0:
+			return len(p_temp)
+		else:
+			try:
+				end = start + p_temp[start:].index(p_temp[0]) +1
+			except ValueError:
+				if start >= 3:
+					end = start
+				else:
+					end = len(p_temp)
+			return end
 
 	@timing_wrapper
 	def find_patterns(self):
 		### Looking for patterns that start and stop with all possible min states.
 		print ('Mining Required Patterns...')
-		for init_ind in range(len(self.sequence)):
-			
+		for init_ind in range(len(self.sequence)-2):
+			# print (init_ind)
 			if self.sequence[init_ind] in self.min_states:
 				p_temp = self.sequence[init_ind:init_ind+self.MAX_LEN]
-				try:
-					end_ind = self.MIN_LEN + p_temp[self.MIN_LEN:].index(p_temp[0])+1
-				except ValueError:
-					end_ind = len(p_temp)
-
+				end_ind = self.__get_end_ind(p_temp)
 				p = self.sequence[init_ind : init_ind+end_ind]
 
-				if len(p) < len(p_temp):
+				if len(p) == 3 :
+					print (p)
+				if p[0] == p[-1]:
 					p_set = self.__patternset_list_contains(p)
 					if p_set == None:
 						p_set = [p]
@@ -66,8 +84,9 @@ class PatternMining:
 						p_set.append(p)
 
 		print ('Total Unique Patterns: ', len(self.pattern_sets))
+		
 		if len(self.pattern_sets) == 0:
-			raise 
+			raise ValueError('No Patterns Found')
 		return self.pattern_sets
 
 	def __patternset_list_contains(self, pattern):
