@@ -2,6 +2,7 @@
 
 from scipy.signal import find_peaks, butter, filtfilt
 from sklearn.mixture import BayesianGaussianMixture
+from sklearn.cluster import DBSCAN
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import pattern_discovery
@@ -13,6 +14,7 @@ import os
 
 
 THRESHOLD = 2610
+N_MAX = 10
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -38,7 +40,7 @@ def get_required_files(device_path, day):
 			for f in files:
 				if day in f and f.endswith('.csv.gz'):
 					file1 = os.path.join(root,f)
-				if file1 and os.path.join(root,f) > file1:
+				if file1 and os.path.join(root,f) > file1 and f.endswith('.csv.gz'):
 					file2 =  os.path.join(root,f)
 					end_search = True
 					break
@@ -137,12 +139,14 @@ def detect_peaks(power_d, power_f):
 
 @timing_wrapper
 def peaks_to_discrete_states(final_peaks):
-	#### BayesianGaussianMixture
-
+	print ('Discretising Values...')
 	total_peaks = np.array(final_peaks)
 	X = total_peaks.reshape(-1,1)
-
-	dpgmm = BayesianGaussianMixture(n_components=10,max_iter= 500,covariance_type='spherical').fit(X)
+	
+	#### BayesianGaussianMixture
+	# gamma = np.std(final_peaks)/(len(final_peaks))
+	# print (gamma)
+	dpgmm = BayesianGaussianMixture(n_components=N_MAX,max_iter= 500,covariance_type='spherical').fit(X) #  weight_concentration_prior=gamma
 	unordered_labels = dpgmm.predict(X)
 	original_means = [x[0] for x in dpgmm.means_]
 	sorted_means = sorted(dpgmm.means_, key=lambda x:x[0])
