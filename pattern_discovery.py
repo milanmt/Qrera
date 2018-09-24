@@ -21,9 +21,9 @@ def timing_wrapper(func):
 
 
 class PatternDiscovery:
-	def __init__ (self, sequence, state_attributes,min_len, max_len):
+	def __init__ (self, sequence, state_attributes,max_len):
 		self.state_attributes = state_attributes
-		self.pm = cpm.PatternMining(sequence, state_attributes, min_len, max_len)
+		self.pm = cpm.PatternMining(sequence, state_attributes, max_len)
 		self.patterns = self.__get_patterns()
 		self.max_var_label = None
 		self.idle_label = None
@@ -32,8 +32,7 @@ class PatternDiscovery:
 		self.idle_patterns = None
 		
 	def __get_patterns(self):
-		pattern_sets = self.pm.find_patterns()
-		seq_support = [(p_set[0], len(p_set)) for p_set in pattern_sets]
+		seq_support = self.pm.find_patterns()
 		return seq_support
 
 	def __dtw_clustering(self, seq_f):
@@ -142,6 +141,34 @@ class PatternDiscovery:
 
 		return cluster_seqs, working_patterns, idle_patterns 
 
+	def __split_add_patterns(self, seq, f):
+		for e, el in enumerate(seq):
+			if el < seq[0]:
+				req_ind = e
+				break
+
+		new_patterns = []
+
+		if req_ind >= 2:
+			t_a = list(seq[:req_ind])
+			t_a.append(seq[0])
+			t_b = list(seq[req_ind:])
+			t_b.insert(0,seq[0])
+
+			for p,p_f in self.possible_patterns:
+				if p == t_a and len(t_a) > 2:
+					new_patterns.append((seq[:req_ind+1],f))
+				if p == t_b and len(t_b) > 2:
+					new_patterns.append((seq[req_ind:],f))
+			
+		return new_patterns
+
+	def __minima_between_maxima(self,seq):
+		for i in range(1,len(seq)-1):
+			if seq[i-1] in self.pm.max_states and seq[i] in self.pm.min_states and seq[i+1] in self.pm.max_states:
+				return i
+		return len(seq)-1
+	
 	@timing_wrapper
 	def discover_pattern(self):
 		if len(self.patterns) == 1:
@@ -149,15 +176,42 @@ class PatternDiscovery:
 			return self.patterns[0][0]
 		
 		### Looking for signals which start and stop with minimas 
-		possible_patterns = []
+		### Looking for signals with minimas inbetween the patterns picked
+		self.possible_patterns = []
+		lesser_minima_patterns = []
+		greater_minima_patterns = []
 		for seq in self.patterns:
-			if all( self.state_attributes[str(s)][0] >= self.state_attributes[str(seq[0][0])][0] for s in seq[0]):
-				possible_patterns.append(seq)
+			if all(s >= seq[0][0] for s in seq[0]):
+				minima_ind = self.__minima_between_maxima(seq[0])
+				if minima_ind != len(seq[0])-1:
+					greater_minima_patterns.append((seq,minima_ind))
+				else:
+					self.possible_patterns.append(seq)
+			else:
+				lesser_minima_patterns.append(seq)
 		
+		for seq, ind in greater_minima_patterns:
+			p1 = seq[0][:ind+1]
+			p1.append(seq[0][0])
+			p2 = seq[0][ind:]
+			p2.insert(0,seq[0][0])
+			new_patterns = []
+			p_l = [seq_l[0] for seq_l in self.possible_patterns]
+			if p1 in p_l and p2 in p_l:
+				self.possible_patterns.append((seq[0][:ind+1],seq[1]))
+				self.possible_patterns.append((seq[0][ind:], seq[1]))
+			else:
+				self.possible_patterns.append(seq)
+
+		for seq,f in lesser_minima_patterns:
+			new_patterns = self.__split_add_patterns(seq,f)	
+			if new_patterns:
+				self.possible_patterns.extend(new_patterns)
+
 		### Clustering with DTW to find patterns. Exemplars from DTW -> final patterns 
 		### These clustered based on mean and variance to identify idle and working patterns
-		if len(possible_patterns) > 1:
-			self.pattern_dict, self.working_patterns, self.idle_patterns= self.cluster_patterns(possible_patterns)
+		if len(self.possible_patterns) > 1:
+			self.pattern_dict, self.working_patterns, self.idle_patterns= self.cluster_patterns(self.possible_patterns)
 			final_patterns = []
 			if self.working_patterns == None:
 				for p_set in self.pattern_dict.values():
@@ -170,10 +224,10 @@ class PatternDiscovery:
 			print (final_patterns)
 			return final_patterns
 		
-		elif len(possible_patterns) == 1:
+		elif len(self.possible_patterns) == 1:
 			self.pattern_dict = {0: [self.patterns[0]]}
-			print( possible_patterns[0][0])
-			return [possible_patterns[0][0]]
+			print( self.possible_patterns[0][0])
+			return [self.possible_patterns[0][0]]
 		else:
 			return None
 
