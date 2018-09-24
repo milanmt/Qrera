@@ -21,9 +21,9 @@ def timing_wrapper(func):
 
 
 class PatternDiscovery:
-	def __init__ (self, sequence, state_attributes,max_len):
+	def __init__ (self, sequence, state_attributes,max_len, min_len):
 		self.state_attributes = state_attributes
-		self.pm = cpm.PatternMining(sequence, state_attributes, max_len)
+		self.pm = cpm.PatternMining(sequence, state_attributes, max_len, min_len)
 		self.patterns = self.__get_patterns()
 		self.max_var_label = None
 		self.idle_label = None
@@ -155,11 +155,15 @@ class PatternDiscovery:
 			t_b = list(seq[req_ind:])
 			t_b.insert(0,seq[0])
 
+			pp = [seq[0] for seq in self.possible_patterns]
+
 			for p,p_f in self.possible_patterns:
-				if p == t_a and len(t_a) > 2:
-					new_patterns.append((seq[:req_ind+1],f))
-				if p == t_b and len(t_b) > 2:
-					new_patterns.append((seq[req_ind:],f))
+				if self.__pattern_distance(p,t_a)== 0 and len(t_a) > 2:
+					if seq[:req_ind+1] not in pp:
+						new_patterns.append((seq[:req_ind+1],f))
+				if self.__pattern_distance(p,t_b) and len(t_b) > 2:
+					if seq[req_ind:] not in pp:
+						new_patterns.append((seq[req_ind:],f))
 			
 		return new_patterns
 
@@ -196,17 +200,16 @@ class PatternDiscovery:
 			p2 = seq[0][ind:]
 			p2.insert(0,seq[0][0])
 			new_patterns = []
-			p_l = [seq_l[0] for seq_l in self.possible_patterns]
-			if p1 in p_l and p2 in p_l:
-				self.possible_patterns.append((seq[0][:ind+1],seq[1]))
-				self.possible_patterns.append((seq[0][ind:], seq[1]))
-			else:
+			p1_b = False
+			p2_b = False
+			for p in self.possible_patterns:
+				if self.__pattern_distance(p[0],p1) == 0 and not p1_b:
+					p1_b = True
+				if self.__pattern_distance(p[0],p2) == 0 and not p2_b:
+					p2_b = True
+			
+			if not (p1_b and p2_b):
 				self.possible_patterns.append(seq)
-
-		for seq,f in lesser_minima_patterns:
-			new_patterns = self.__split_add_patterns(seq,f)	
-			if new_patterns:
-				self.possible_patterns.extend(new_patterns)
 
 		### Clustering with DTW to find patterns. Exemplars from DTW -> final patterns 
 		### These clustered based on mean and variance to identify idle and working patterns
