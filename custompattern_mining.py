@@ -46,14 +46,11 @@ class PatternMining:
 
 	
 	def __get_end_ind(self, p_temp):
-		start = self.MIN_LEN
+		start = self.MIN_LEN - 1
 		try:
 			end = start + p_temp[start:].index(p_temp[0]) +1
 		except ValueError:
-			if start >= 3:
-				end = start
-			else:
-				end = len(p_temp)
+			end = len(p_temp)
 		return end
 
 	@timing_wrapper
@@ -65,9 +62,9 @@ class PatternMining:
 			if self.sequence[init_ind] in self.min_states:
 				p_temp = self.sequence[init_ind:init_ind+self.MAX_LEN]
 				end_ind = self.__get_end_ind(p_temp)
-				p = tuple(self.sequence[init_ind : init_ind+end_ind])
-
-				if p[0] == p[-1]:
+				
+				if end_ind < len(p_temp):
+					p = tuple(self.sequence[init_ind : init_ind+end_ind])
 					p_set = self.__patternset_list_contains(p)
 					if p_set == None:
 						self.__pattern_sets.update({p : {p :1}})
