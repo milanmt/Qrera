@@ -45,6 +45,7 @@ class PatternMatching:
 						ends.append(end_ind_t)
 						end_ind_t +=1
 
+					### preferring longer patterns rather than shorter ones 
 					min_dist = min(dists)
 					for e,d in enumerate(dists):
 						if d == min_dist:
