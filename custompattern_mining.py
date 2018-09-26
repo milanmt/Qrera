@@ -1,5 +1,6 @@
 #! /usr/bin/env python3 
 
+from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import peak_detector as pd
 from dtw import dtw 
@@ -20,23 +21,31 @@ def timing_wrapper(func):
 	return wrapper
 
 class PatternMining:
-	def __init__(self, sequence, state_attributes, max_len, min_len):
+	def __init__(self, sequence, state_attributes, min_len, max_len):
 		self.sequence = sequence
 		self.MAX_LEN = max_len   ## Max len should be greater than longest possible pattern
 		self.MIN_LEN = min_len
+		if self.MAX_LEN <= self.MIN_LEN:
+			raise ValueError('Incorrect values for length of pattern')
 		self.state_attributes = state_attributes
 		self.min_states, self.max_states = self.__partition_states()
 		self.__pattern_sets = dict()
 		self.patterns_unique = []
 
 	def __partition_states(self):
-		seq_means = [s[0] for s in self.state_attributes.values()]
+		seq_means = np.array([s[0] for s in self.state_attributes.values()]).reshape(-1,1)
 		print (seq_means)
-		mean_th = jenkspy.jenks_breaks(seq_means, nb_class=2)[1]
+		kmeans = KMeans(2).fit(seq_means)
+		cl_centers = [cl[0] for cl in kmeans.cluster_centers_] 
+		if cl_centers[0] > cl_centers[1]:
+			max_id = 0
+		else:
+			max_id = 1
 		max_states = []
 		min_states = []
 		for state, attributes in self.state_attributes.items():
-			if attributes[0] > mean_th:
+			predicted_output = kmeans.predict([[attributes[0]]])
+			if int(predicted_output[0]) == max_id:
 				max_states.append(int(state))
 			else:
 				min_states.append(int(state))
@@ -95,7 +104,7 @@ class PatternMining:
 		return None
 
 	def __pattern_distance(self, head, pattern):
-		val_a = np.array([self.state_attributes[str(s)][0] for s in head])
-		val_b = np.array([self.state_attributes[str(s)][0] for s in pattern])
-		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
+		val_a = [self.state_attributes[str(s)][0] for s in head]
+		val_b = [self.state_attributes[str(s)][0] for s in pattern]
+		dist, _, _, _ = dtw(val_a, val_b, dist=lambda x,y:np.linalg.norm(x-y))
 		return dist
