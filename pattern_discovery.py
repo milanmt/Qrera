@@ -21,9 +21,9 @@ def timing_wrapper(func):
 
 
 class PatternDiscovery:
-	def __init__ (self, sequence, state_attributes,max_len, min_len):
+	def __init__ (self, sequence, state_attributes,min_len, max_len):
 		self.state_attributes = state_attributes
-		self.pm = cpm.PatternMining(sequence, state_attributes, max_len, min_len)
+		self.pm = cpm.PatternMining(sequence, state_attributes, min_len, max_len)
 		self.patterns = self.__get_patterns()
 		self.max_var_label = None
 		self.idle_label = None
@@ -57,7 +57,7 @@ class PatternDiscovery:
 		p_dist = p_dist_max - p_dist
 		
 		### Affinity Propagation
-		freq = p_dist_max*freq/max(freq)
+		freq = 2*p_dist_max*freq/max(freq)
 		ap = AffinityPropagation(affinity='precomputed', preference=freq)
 		ap.fit(p_dist)
 		cluster_subseqs_exs = [ seq[ind] for ind in ap.cluster_centers_indices_]
@@ -141,38 +141,6 @@ class PatternDiscovery:
 
 		return cluster_seqs, working_patterns, idle_patterns 
 
-	def __split_add_patterns(self, seq, f):
-		for e, el in enumerate(seq):
-			if el < seq[0]:
-				req_ind = e
-				break
-
-		new_patterns = []
-
-		if req_ind >= 2:
-			t_a = list(seq[:req_ind])
-			t_a.append(seq[0])
-			t_b = list(seq[req_ind:])
-			t_b.insert(0,seq[0])
-
-			pp = [seq[0] for seq in self.possible_patterns]
-
-			for p,p_f in self.possible_patterns:
-				if self.__pattern_distance(p,t_a)== 0 and len(t_a) > 2:
-					if seq[:req_ind+1] not in pp:
-						new_patterns.append((seq[:req_ind+1],f))
-				if self.__pattern_distance(p,t_b) and len(t_b) > 2:
-					if seq[req_ind:] not in pp:
-						new_patterns.append((seq[req_ind:],f))
-			
-		return new_patterns
-
-	def __minima_between_maxima(self,seq):
-		for i in range(1,len(seq)-1):
-			if seq[i-1] in self.pm.max_states and seq[i] in self.pm.min_states and seq[i+1] in self.pm.max_states:
-				return i
-		return len(seq)-1
-	
 	@timing_wrapper
 	def discover_pattern(self):
 		if len(self.patterns) == 1:
@@ -181,40 +149,15 @@ class PatternDiscovery:
 		
 		### Looking for signals which start and stop with minimas 
 		### Looking for signals with minimas inbetween the patterns picked
-		self.possible_patterns = []
-		lesser_minima_patterns = []
-		greater_minima_patterns = []
+		possible_patterns = []
 		for seq in self.patterns:
 			if all(s >= seq[0][0] for s in seq[0]):
-				minima_ind = self.__minima_between_maxima(seq[0])
-				if minima_ind != len(seq[0])-1:
-					greater_minima_patterns.append((seq,minima_ind))
-				else:
-					self.possible_patterns.append(seq)
-			else:
-				lesser_minima_patterns.append(seq)
-		
-		for seq, ind in greater_minima_patterns:
-			p1 = seq[0][:ind+1]
-			p1.append(seq[0][0])
-			p2 = seq[0][ind:]
-			p2.insert(0,seq[0][0])
-			new_patterns = []
-			p1_b = False
-			p2_b = False
-			for p in self.possible_patterns:
-				if self.__pattern_distance(p[0],p1) == 0 and not p1_b:
-					p1_b = True
-				if self.__pattern_distance(p[0],p2) == 0 and not p2_b:
-					p2_b = True
-			
-			if not (p1_b and p2_b):
-				self.possible_patterns.append(seq)
+				possible_patterns.append(seq)
 
 		### Clustering with DTW to find patterns. Exemplars from DTW -> final patterns 
 		### These clustered based on mean and variance to identify idle and working patterns
-		if len(self.possible_patterns) > 1:
-			self.pattern_dict, self.working_patterns, self.idle_patterns= self.cluster_patterns(self.possible_patterns)
+		if len(possible_patterns) > 1:
+			self.pattern_dict, self.working_patterns, self.idle_patterns= self.cluster_patterns(possible_patterns)
 			final_patterns = []
 			if self.working_patterns == None:
 				for p_set in self.pattern_dict.values():
@@ -227,17 +170,17 @@ class PatternDiscovery:
 			print (final_patterns)
 			return final_patterns
 		
-		elif len(self.possible_patterns) == 1:
+		elif len(possible_patterns) == 1:
 			self.pattern_dict = {0: [self.patterns[0]]}
-			print( self.possible_patterns[0][0])
-			return [self.possible_patterns[0][0]]
+			print( possible_patterns[0][0])
+			return [possible_patterns[0][0]]
 		else:
 			return None
 
 	def __pattern_distance(self,a,b):
-		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
-		val_b = np.array([self.state_attributes[str(s)][0] for s in b])
-		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
+		val_a = [self.state_attributes[str(s)][0] for s in a]
+		val_b = [self.state_attributes[str(s)][0] for s in b]
+		dist, _, _, _ = dtw(val_a, val_b, dist=lambda x,y:np.linalg.norm(x-y))
 		return dist 
 
 
