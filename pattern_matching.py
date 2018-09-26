@@ -1,9 +1,7 @@
 #! /usr/bin/env python3
-
 from dtw import dtw
 import numpy as np
 import time
-
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -15,13 +13,14 @@ def timing_wrapper(func):
 	return wrapper
 
 class PatternMatching:
-	def __init__(self, pattern_dict, state_attributes, sequence, max_len):
+	def __init__(self, pattern_dict, state_attributes, sequence, min_len,  max_len):
 		self.pattern_dict = pattern_dict
 		self.sequence = sequence
 		self.state_attributes = state_attributes
 		self.pattern_sequence = None
 		self.pattern_sequence_indices = None
 		self.max_len = max_len
+		self.min_len = min_len
 
 	@timing_wrapper
 	def find_matches(self):
@@ -33,20 +32,23 @@ class PatternMatching:
 		while start_ind < len(self.sequence)-1:
 			min_pdist = np.inf
 			for label, p_set in self.pattern_dict.items():
-				for pattern,freq in p_set:
+
+				p_set_d	= [max(p_set, key=lambda x:x[1])]
+				for pattern,freq in p_set_d:
 					dists = []
 					ends = []
-					end_ind_t = start_ind+len(pattern)
-					while end_ind_t <= start_ind+self.max_len:
-						p_temp = self.sequence[start_ind:end_ind_t]
+					end_ind_t = start_ind+self.min_len-1
+					while end_ind_t < start_ind+self.max_len:
+						p_temp = self.sequence[start_ind:end_ind_t+1]
 						dist = self.__pattern_distance(p_temp,pattern)
 						dists.append(dist)
 						ends.append(end_ind_t)
 						end_ind_t +=1
 
 					min_dist = min(dists)
-					min_dist_ind = dists.index(min_dist)
-					end_ind_f = ends[min_dist_ind]
+					for e,d in enumerate(dists):
+						if d == min_dist:
+							end_ind_f = ends[e]
 
 					if min_pdist > min_dist:
 						min_pdist = min_dist
@@ -56,18 +58,17 @@ class PatternMatching:
 			pattern_sequence.append(req_label)
 			if end_ind < len(self.sequence):
 				pattern_sequence_indices.append(end_ind)
-			start_ind = end_ind - 1
-
+			start_ind = end_ind
+		
 		self.pattern_sequence = pattern_sequence
 		self.pattern_sequence_indices = pattern_sequence_indices
-		### Counting unique values
-		vals, counts = np.unique(pattern_sequence, return_counts=True)
+		vals, counts = np.unique(pattern_sequence, return_counts=True) ### Counting unique values
 		print (vals)
 		print (counts)
 		return pattern_sequence, pattern_sequence_indices
 
 	def __pattern_distance(self,a,b):
-		val_a = np.array([self.state_attributes[str(s)][0] for s in a])
-		val_b = np.array([self.state_attributes[str(s)][0] for s in b])
-		dist, _, _, _ = dtw(val_a.reshape(-1,1), val_b.reshape(-1,1), dist=lambda x,y:np.linalg.norm(x-y))
+		val_a = [self.state_attributes[str(s)][0] for s in a]
+		val_b = [self.state_attributes[str(s)][0] for s in b]
+		dist, _, _, _ = dtw(val_a, val_b, dist=lambda x,y:np.linalg.norm(x-y))
 		return dist 
