@@ -147,8 +147,7 @@ class PatternDiscovery:
 			self.pattern_dict = {0: [self.patterns[0]]}
 			return self.patterns[0][0]
 		
-		### Looking for signals which start and stop with minimas 
-		### Looking for signals with minimas inbetween the patterns picked
+		### Looking for signals which start and stop with minimas. Need to doscover most likely candidate. 
 		possible_patterns = []
 		for seq in self.patterns:
 			if all(s >= seq[0][0] for s in seq[0]):
