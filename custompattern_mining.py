@@ -87,7 +87,8 @@ class PatternMining:
 		for p_set in self.__pattern_sets.values():
 			total_freq = sum(p_set.values())
 			max_item = max([z for z in p_set.items()], key= lambda x:x[1])
-			self.patterns_unique.append((list(max_item[0]),total_freq))
+			if total_freq > 1:
+				self.patterns_unique.append((list(max_item[0]),total_freq))
 
 		print ('Total Unique Patterns: ', len(self.patterns_unique))
 		print (self.patterns_unique)
