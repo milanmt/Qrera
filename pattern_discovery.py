@@ -32,7 +32,32 @@ class PatternDiscovery:
 		self.idle_patterns = None
 		
 	def __get_patterns(self):
-		seq_support = self.pm.find_patterns()
+		# seq_support = self.pm.find_patterns()
+		## Saving data for autoacc
+		# with open('autoacc_patterns.txt', 'w') as f:
+		# 	for seq, freq in seq_support:
+		# 		f.write('([')
+		# 		for i in range(len(seq)):
+		# 			if i!= len(seq)-1:
+		# 				f.write('{0}, '.format(seq[i]))
+		# 			else:
+		# 				f.write('{0}], {1})\n'.format(seq[i],freq))
+
+		## reading data for auto acc
+		seq_support = []
+		with open('autoacc_patterns.txt', 'r') as f:
+			for line in f:
+				to_be_removed = ['[', ']', '(', ')']
+				t_l = line
+				for s in to_be_removed:
+					t_l = t_l.replace(s, '')
+
+				split_t_l = t_l.split(',')
+				seq = [int(s.strip()) for s in split_t_l[:-1]]
+				freq = int(split_t_l[-1].strip())
+				if freq > 1:
+					seq_support.append((seq, freq))
+
 		return seq_support
 
 	def __dtw_clustering(self, seq_f):
@@ -68,10 +93,8 @@ class PatternDiscovery:
 			if label not in cluster_subseqs:
 				cluster_subseqs.update({label : [seq]})
 			else:
-				seq_list = cluster_subseqs[label]
-				seq_list.append(seq)
-				cluster_subseqs.update({ label: seq_list})
-		
+				cluster_subseqs[label].append(seq)
+				
 		return cluster_subseqs, cluster_subseqs_exs
 
 	@timing_wrapper
@@ -113,15 +136,6 @@ class PatternDiscovery:
 		self.idle_label = idle_label
 		max_label = cl_mv_labels[cluster_mv_norm.index(max(cluster_mv_norm))]
 		self.max_var_label = max_label
-		
-		### Classification based on variance of patterns, min_var -> idle, other exemplars-> working
-		working_patterns = []
-		idle_patterns = []
-		for e,l in enumerate(cl_mv_labels):
-			if l == idle_label:
-				idle_patterns.append(cluster_subseqs_exs[e])
-			else:
-				working_patterns.append(cluster_subseqs_exs[e])
 
 		### Grouping sequences by cluster label -> later inference 
 		cluster_seqs = dict()
@@ -130,7 +144,29 @@ class PatternDiscovery:
 				cluster_seqs.update({label : list(cluster_subseqs[e])})
 			else:
 				cluster_seqs[label].extend(cluster_subseqs[e])
-				
+
+		labels_to_remove = []
+		### Checking if clusters have to be removed
+		for l,p_set in cluster_seqs.items():
+			max_p = max(p_set, key=lambda x:x[1])[0] 
+			for p_set2 in cluster_seqs.values():
+				max_p2 = max(p_set2, key=lambda x:x[1])[0]
+				if max_p2 != max_p and seq_contains(max_p2,max_p):
+					labels_to_remove.append(l)
+
+		for l in labels_to_remove:
+			if l != self.max_var_label or l != self.idle_label:
+				del cluster_seqs[l]
+								
+		### Classification based on variance of patterns, min_var -> idle, other exemplars-> working
+		working_patterns = []
+		idle_patterns = []
+		for l in cluster_seqs:
+			if l == idle_label:
+				idle_patterns.append(max(cluster_seqs[l], key=lambda x:x[1])[0])
+			else:
+				working_patterns.append(max(cluster_seqs[l], key=lambda x:x[1])[0])
+
 		### Printing values
 		print ('Final Number of Clusters: ', len(cluster_seqs))
 		print ('Idle Class: ', idle_label)
