@@ -18,15 +18,11 @@ N_MAX = 10
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
-		
 		t0= time.time()
 		func_val = func(*args,**kwargs)
 		time_taken = time.time() - t0
-
 		print (str(func),' took: ', time_taken)
-
 		return func_val
-
 	return wrapper
 
 def get_required_files(device_path, day):
@@ -144,9 +140,9 @@ def peaks_to_discrete_states(final_peaks):
 	X = total_peaks.reshape(-1,1)
 	
 	#### BayesianGaussianMixture
-	# gamma = np.std(final_peaks)/(len(final_peaks))
-	# print (gamma)
-	dpgmm = BayesianGaussianMixture(n_components=N_MAX,max_iter= 500,covariance_type='spherical').fit(X) #  weight_concentration_prior=gamma
+	gamma = np.std(final_peaks)/(len(final_peaks))
+	print (gamma)
+	dpgmm = BayesianGaussianMixture(n_components=N_MAX,max_iter= 500,covariance_type='spherical', weight_concentration_prior=gamma, random_state=0).fit(X)
 	unordered_labels = dpgmm.predict(X)
 	original_means = [x[0] for x in dpgmm.means_]
 	sorted_means = sorted(dpgmm.means_, key=lambda x:x[0])
