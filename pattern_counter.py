@@ -30,10 +30,15 @@ def get_required_files(device_path, day):
 	return file1, file2
 
 if __name__ == '__main__':
-	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_18'
-	# device_path = '/media/milan/DATA/Qrera/HiraAutomation/B4E62D388226'
-	# day = '2018_06_25'
+	# device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
+	# day = '2018_07_07'
+
+	# device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
+	# day = '2018_09_18'
+	
+	device_path = '/media/milan/DATA/Qrera/AutoAcc/39FFBE'
+	day = '2018_04_27'
+	
 	file1, file2 = get_required_files(device_path, day)
 
 	# file1 = 'test_data.csv'
@@ -49,31 +54,32 @@ if __name__ == '__main__':
 		with open('state_attributes.json', 'w') as f:
 			json.dump(state_attributes, f)
 
-		pm = ptd.PatternDiscovery(array, state_attributes, 3,6)
+		pm = ptd.PatternDiscovery(array, state_attributes, 7,20)
 		final_pattern = pm.discover_pattern()
+		# final_pattern = 'a'
 		print (final_pattern)
 		no_iter += 1
 		if no_iter >= 5:
 			raise ValueError('Could not find valid pattern. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')
 
-	p_m = ptm.PatternMatching(pm.pattern_dict, state_attributes, array, 10)
+	p_m = ptm.PatternMatching(pm.pattern_dict, state_attributes, array,7,25)
 	p_array, p_indices = p_m.find_matches()
 
 	print ('Mapping time indices...')
 	simplified_seq = np.zeros((len(power_f)))
 	start_ind = 0
 	for e,i in enumerate(p_indices):
-		simplified_seq[start_ind:peak_indices[i]] = p_array[e]
+		simplified_seq[start_ind:peak_indices[i]+1] = p_array[e]
 		start_ind = peak_indices[i]
 	
 	print ('Plotting...')
-	unique_labels = np.unique(simplified_seq)
+	unique_labels = list(np.unique(simplified_seq))
 	y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
 	for e,el in enumerate(simplified_seq):
-		y_plot[int(el),e] = power_f[e]
+		y_plot[unique_labels.index(int(el)),e] = power_f[e]
 	time = np.arange(len(power_f))
 	
 	plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
-	data = [go.Scatter(x=time, y=y_plot[int(i),:]) for i in unique_labels]
+	data = [go.Scatter(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
 	fig = go.Figure(data = data)
-	plotly.plotly.plot(fig, filename='qrera_pattern_counting')
+	plotly.plotly.plot(fig, filename='autoacc_pattern_counting')
