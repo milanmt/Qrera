@@ -24,16 +24,18 @@ class PatternDiscovery:
 	def __init__ (self, sequence, state_attributes,min_len, max_len):
 		self.state_attributes = state_attributes
 		self.pm = cpm.PatternMining(sequence, state_attributes, min_len, max_len)
+		self.all_pattern_sets = self.pm.pattern_sets
 		self.patterns = self.__get_patterns()
 		self.max_var_label = None
 		self.idle_label = None
 		self.pattern_dict = None
 		self.working_patterns = None
 		self.idle_patterns = None
+		self.classification_dict = None
 		
 	def __get_patterns(self):
-		# seq_support = self.pm.find_patterns()
-		## Saving data for autoacc
+		seq_support = self.pm.find_patterns()
+		# # Saving data for autoacc
 		# with open('autoacc_patterns.txt', 'w') as f:
 		# 	for seq, freq in seq_support:
 		# 		f.write('([')
@@ -44,19 +46,19 @@ class PatternDiscovery:
 		# 				f.write('{0}], {1})\n'.format(seq[i],freq))
 
 		## reading data for auto acc
-		seq_support = []
-		with open('autoacc_patterns.txt', 'r') as f:
-			for line in f:
-				to_be_removed = ['[', ']', '(', ')']
-				t_l = line
-				for s in to_be_removed:
-					t_l = t_l.replace(s, '')
+		# seq_support = []
+		# with open('fwt_patterns.txt', 'r') as f:
+		# 	for line in f:
+		# 		to_be_removed = ['[', ']', '(', ')']
+		# 		t_l = line
+		# 		for s in to_be_removed:
+		# 			t_l = t_l.replace(s, '')
 
-				split_t_l = t_l.split(',')
-				seq = [int(s.strip()) for s in split_t_l[:-1]]
-				freq = int(split_t_l[-1].strip())
-				if freq > 1:
-					seq_support.append((seq, freq))
+		# 		split_t_l = t_l.split(',')
+		# 		seq = [int(s.strip()) for s in split_t_l[:-1]]
+		# 		freq = int(split_t_l[-1].strip())
+		# 		if freq > 1:
+		# 			seq_support.append((seq, freq))
 
 		return seq_support
 
@@ -175,6 +177,28 @@ class PatternDiscovery:
 			print (k)
 			print (cluster_seqs[k])
 
+
+		### Pattern dictionary for classification
+		new_cluster_dict = dict()
+		for e,label in enumerate(cl_mv_labels):
+			full_list = []
+			for pattern,f in cluster_subseqs[e]:
+				for p, p_dict in self.pm.pattern_sets.items():
+					if self.__pattern_distance(p,pattern) == 0.0:
+						for p_s, f in p_dict.items():
+							full_list.append((list(p_s),f))
+
+
+			if label not in new_cluster_dict:
+				new_cluster_dict.update({label : full_list})
+			else:
+				new_cluster_dict[label].extend(full_list)
+
+		self.classification_dict = new_cluster_dict
+		for k in new_cluster_dict:
+			print (k)
+			print (new_cluster_dict[k])
+
 		return cluster_seqs, working_patterns, idle_patterns 
 
 	@timing_wrapper
@@ -220,6 +244,7 @@ class PatternDiscovery:
 
 
 def seq_contains(seq, subseq):
+	#### Should make this dtw
 	seq_s = str()
 	for x in seq:
 		seq_s = seq_s + str(x)
