@@ -21,11 +21,7 @@ class PatternClassification:
 		self.sequence = sequence
 		self.min_len = min_len
 		self.max_len = max_len
-		self.classifiers = []
-		for label in self.feature_dict.keys():
-			classifier = self.__train_classifier(label)
-			self.classifiers.append(classifier)
-
+		self.classifier =  self.__train_classifier()
 
 	def __get_feature_vector(self, p):
 		vector = np.zeros((len(self.transform_state_labels)))
@@ -43,25 +39,23 @@ class PatternClassification:
 			feature_dict.update({ label : feature_set})
 		return feature_dict
 
-	def __train_classifier(self, req_label):
+	def __train_classifier(self):
 		X = []
 		y = []
 		for l, fv in self.feature_dict.items():
 			X.extend(list(fv))
-			if l == req_label:
-				y.extend(len(fv)*[1])
-			else:
-				y.extend(len(fv)*[0])
-
-		gpc = GaussianProcessClassifier().fit(np.array(X), np.array(y))
+			fv_o = len(fv)*[bin(l)]
+			y.extend(fv_o)
+		gpc = GaussianProcessClassifier(multi_class='one_vs_rest').fit(np.array(X), np.array(y))
+		self.transform_pattern_labels = [int(l,2) for l in gpc.classes_]
 		return gpc
 
 	def get_probabilities(self, text_x):
 		fv_x = self.__get_feature_vector(text_x).reshape(1,-1)
-		probs = dict()
-		for label,classifier in zip(self.feature_dict.keys(), self.classifiers):
-			probs.update({label : classifier.predict_proba(fv_x)[0][1]})
-		return probs
+		probs = list(self.classifier.predict_proba(fv_x)[0])
+		prob_t = np.max(self.classifier)
+		label_t = self.transform_pattern_labels[probs.index(prob_t)]
+		return prob_t, label_t
 
 	@timing_wrapper
 	def find_matches(self):
@@ -71,18 +65,22 @@ class PatternClassification:
 		pattern_sequence = []
 		pattern_sequence_indices = []
 		while start_ind < len(self.sequence)-1:
-			max_prob = 0
-			req_label = None
+			max_probs = []
+			req_labels = []
+			end_ind_list = []
 			end_ind_t = start_ind+self.min_len-1
 			while end_ind_t < start_ind+self.max_len:
 				p_temp = self.sequence[start_ind:end_ind_t+1]
-				for label, prob in self.get_probabilities(p_temp).items():
-					if prob >= max_prob:
-						max_prob = prob
-						req_label = label
-						end_ind = end_ind_t
-					
+				prob_t, label_t = self.get_probabilities(p_temp).items()
+				max_probs.append(prob_t)
+				req_labels.append(label_t)
+				end_ind_list = end_ind_t
 				end_ind_t +=1
+
+			max_prob = max(max_probs)
+			req_ind = list(reversed(max_probs)).index(max_prob)
+			req_label = req_labels[len(max_probs)-1-req_ind]
+			end_ind = end_ind_list[len(max_probs)-1-req_ind]
 
 			pattern_sequence.append(req_label)
 			if end_ind < len(self.sequence):
