@@ -2,18 +2,14 @@
 
 from scipy.signal import find_peaks, butter, filtfilt
 from sklearn.mixture import BayesianGaussianMixture
-from sklearn.cluster import DBSCAN
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import pattern_discovery
-# import find_threshold 
 import pandas as pd 
 import numpy as np 
 import time
 import os
 
-
-THRESHOLD = 2610
 N_MAX = 10
 
 def timing_wrapper(func):
@@ -41,14 +37,6 @@ def get_required_files(device_path, day):
 					end_search = True
 					break
 	return file1, file2
-
-
-def zero_cross_detector(sig):
-	indices = []
-	for i in range(len(sig)-1):
-		if sig[i] > 0 and sig[i+1] < 0:
-			indices.append(i)
-	return np.array(indices)
 
 def lpf(data):
 	if len(data) < 13:
@@ -95,43 +83,18 @@ def preprocess_power(f1, f2):
 				for j in range(int(df.iloc[i,1]-df.iloc[i-1,1])):
 					power.append(df.iloc[i-1,0])
 
-
-	## Thresholding Signal   ## This is necessary if you plan to distinguish cycles based on threshold.
-	# power = pd.Series(power).apply(lambda x: x if x > THRESHOLD else THRESHOLD)
-
 	## Smoothing 
 	print ('Filtering signal ...')
 	power_f = lpf(power)
 
-	### Differencing filter
-	print ('Differentiating signal ...')
-	p_detrend = []
-	for i in range(len(power_f)-1):
-		p_detrend.append(power_f[i+1]-power_f[i])
-
-	## Smoothing derivative
-	print ('Smoothing derivative of signal ...')
-	power_d = lpf(p_detrend)
-
-	return power_d, power_f
+	return power_f
 
 @timing_wrapper
-def detect_peaks(power_d, power_f):
+def detect_peaks(power_f):
 	print ('Detecting Peaks of Signal....')
-	# power_d - smoothed derivative of signal;
-	# power_f - filtered signal
-	# peaks, _ = find_peaks(power_d)  # Find peaks returns the actual peaks of derivative
-	
-	peaks = zero_cross_detector(power_d)  # Returns indices of peaks in signal 
-	peaks = peaks+1
-	
-	## For obtaining actual signal with peaks.
-	# peak_p = np.zeros((len(power_d)))
-	# peak_p[peaks] = power_f[peaks]
-
-	final_peaks = power_f[peaks]
-
-	return final_peaks, peaks
+	peak_indices, _ = find_peaks(power_f)  # Find peaks returns the actual peaks of derivative
+	final_peaks = power_f[peak_indices]
+	return final_peaks, peak_indices 
 
 @timing_wrapper
 def peaks_to_discrete_states(final_peaks):
@@ -174,72 +137,9 @@ def peaks_to_discrete_states(final_peaks):
 
 
 if __name__ == '__main__':
-
 	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
 	day = '2018_07_07'
-
 	file1, file2 = get_required_files(device_path, day)
-
-	power_d, power_f = preprocess_power(file1, file2)
-
-	final_peaks, peak_indices = detect_peaks(power_d, power_f)
-
+	power_f = preprocess_power(file1, file2)
+	final_peaks, peak_indices = detect_peaks(power_f)
 	labels = peaks_to_discrete_states(final_peaks)
-
-
-	################ Visualization
-
-	# total_peaks_len = len(final_peaks)
-	# print (total_peaks_len)
-	# plt.plot(range(total_peaks_len),final_peaks)
-	# plt.show()
-
-	# color=['navy', 'c', 'cornflowerblue', 'gold','darkorange', 'r', 'g', 'm', 'y', 'k']
-	
-	# color_labels = []
-	# for label in labels:
-	# 	color_labels.append(color[int(label)])
-
-
-	# plt.scatter(range(total_peaks_len), final_peaks, color= color_labels)
-	# plt.show()
-
-	# print (dpgmm.means_)
-	# print (dpgmm.covariances_)
-	# print (dpgmm.weights_)
-
-
-	#################################################################################################
-
-	##################### Finding patterns where correlation was maximum.
-
-	# n_power_f = (power_f - np.mean(power_f))/(np.std(power_f)*len(power_f))
-
-	# pattern = np.array(power_f[180:200])
-	# n_pattern = (pattern - np.mean(pattern))/(np.std(pattern))
-	
-	# correlation = np.correlate(n_power_f, n_pattern,'full')
-
-	# peaks, _ = find_peaks(correlation, height=0.0005)
-	# print ('Total Signals Detected: ', len(peaks))
-
-	# plt.plot(correlation[0:1500])
-	# plt.show()
-
-	######################
-	
-	####################### Filtering peaks with a threshold
-	# peak_pr = [round(p) for p in final_peaks]
-	# peak_threshold = find_threshold.get_otsus_threshold(peak_pr)
-	# print ('peak_threshold', peak_threshold)
-
-	# for p in range(len(final_peaks)):
-	# 	if final_peaks[p] < peak_threshold:
-	# 		final_peaks[p] = 0
-	
-	# total_peaks = [p for p in final_peaks if p != 0]
-	# print( 'Total Peaks Count: ', len(total_peaks))
-	
-	########################
-
-	
