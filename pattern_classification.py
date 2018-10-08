@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.naive_bayes import GaussianNB
 import numpy as np 
 import time
 
@@ -17,6 +18,7 @@ class PatternClassification:
 	def __init__(self, pattern_dict, state_attributes, sequence, min_len,  max_len):
 		self.transform_state_labels = [int(l) for l in state_attributes.keys()]
 		self.number_classifiers = len(pattern_dict)
+		self.pattern_dict = pattern_dict
 		self.feature_dict = self.__get_feature_dict(pattern_dict)
 		self.sequence = sequence
 		self.min_len = min_len
@@ -42,18 +44,27 @@ class PatternClassification:
 	def __train_classifier(self):
 		X = []
 		y = []
+		weight_vector = []
 		for l, fv in self.feature_dict.items():
 			X.extend(list(fv))
-			fv_o = len(fv)*[bin(l)]
+			# fv_o = len(fv)*[bin(l)]
+			fv_o = len(fv)*[l]
 			y.extend(fv_o)
-		gpc = GaussianProcessClassifier(multi_class='one_vs_rest').fit(np.array(X), np.array(y))
-		self.transform_pattern_labels = [int(l,2) for l in gpc.classes_]
-		return gpc
+			weights = [p[1] for p in self.pattern_dict[l]]
+			weight_vector.extend(weights)
+
+		classifier = GaussianNB()
+		classifier.fit(np.array(X),np.array(y), np.array(weight_vector))
+
+		# classifier = GaussianProcessClassifier(multi_class='one_vs_rest').fit(np.array(X), np.array(y))
+		# self.transform_pattern_labels = [int(l,2) for l in classifier.classes_]
+		self.transform_pattern_labels = [l for l in classifier.classes_]
+		return classifier
 
 	def get_probabilities(self, text_x):
 		fv_x = self.__get_feature_vector(text_x).reshape(1,-1)
 		probs = list(self.classifier.predict_proba(fv_x)[0])
-		prob_t = np.max(self.classifier)
+		prob_t = np.max(probs)
 		label_t = self.transform_pattern_labels[probs.index(prob_t)]
 		return prob_t, label_t
 
@@ -71,14 +82,13 @@ class PatternClassification:
 			end_ind_t = start_ind+self.min_len-1
 			while end_ind_t < start_ind+self.max_len:
 				p_temp = self.sequence[start_ind:end_ind_t+1]
-				prob_t, label_t = self.get_probabilities(p_temp).items()
+				prob_t, label_t = self.get_probabilities(p_temp)
 				max_probs.append(prob_t)
 				req_labels.append(label_t)
-				end_ind_list = end_ind_t
+				end_ind_list.append(end_ind_t)
 				end_ind_t +=1
 
-			max_prob = max(max_probs)
-			req_ind = list(reversed(max_probs)).index(max_prob)
+			req_ind = max_probs.index(prob_t)
 			req_label = req_labels[len(max_probs)-1-req_ind]
 			end_ind = end_ind_list[len(max_probs)-1-req_ind]
 
