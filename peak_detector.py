@@ -72,18 +72,18 @@ def preprocess_power(f1, f2):
 	print (df.shape[0])
 	power = np.zeros((86400))
 	power[0] = df.iloc[0,0]
-	offset = df.iloc[0,1]
+	offset = int(df.iloc[0,1])
 	t = offset
 	for i in range(df.shape[0]):
 		if df.iloc[i,1] != t:
 			if df.iloc[i,1]-t == 1.0:
 				power[t+1-offset] = df.iloc[i,0]
 				t+=1
-
 			else:
 				orig_t = t
+				req_offset = orig_t+1-offset
 				for j in range(int(df.iloc[i,1]-orig_t)):
-					power[orig_t+j+1-offset] = df.iloc[i-1,0]
+					power[req_offset] = df.iloc[i-1,0]
 					t+=1
 		else: 
 			power[t-offset] = (power[t-offset]+df.iloc[i,0])/2
@@ -97,18 +97,14 @@ def preprocess_power(f1, f2):
 @timing_wrapper
 def detect_peaks(power_f):
 	print ('Detecting Peaks of Signal....')
-	peak_indices, _ = find_peaks(power_f)  # Find peaks returns the actual peaks of derivative
+	peak_indices_max, _ = find_peaks(power_f)  # Find peaks returns the actual peaks of derivative
+	negative_powerf = -1*power_f
+	peak_indices_min, _ = find_peaks(negative_powerf)  # Find peaks returns the actual peaks of derivative
+	peak_indices = []
+	peak_indices.extend(peak_indices_min)
+	peak_indices.extend(peak_indices_max)
+	peak_indices.sort()
 	final_peaks = power_f[peak_indices]
-	# print (peak_indices)
-	# print (len(final_peaks))
-	# negative_powerf = -1*power_f
-	# peak_indices_min, _ = find_peaks(negative_powerf)  # Find peaks returns the actual peaks of derivative
-	# final_peaks_min = negative_powerf[peak_indices]
-	# print (peak_indices_min)
-	# print (len(final_peaks_min))
-
-	# print ('total points to be considered' , len(final_peaks_min)+len(final_peaks) )
-	# print ('original', len(power_f))
 	return final_peaks, peak_indices 
 
 @timing_wrapper
@@ -152,11 +148,11 @@ def signal_to_discrete_states(final_peaks):
 
 
 if __name__ == '__main__':
-	# device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	# day = '2018_07_07'
+	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
+	day = '2018_07_07'
 
-	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
-	day = '2018_09_18'
+	# device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
+	# day = '2018_09_18'
 	
 	# device_path = '/media/milan/DATA/Qrera/AutoAcc/39FFBE'
 	# day = '2018_04_27' #'2017_12_09'
