@@ -11,7 +11,7 @@ import time
 import os
 
 N_MAX = 10
-WINDOW = 10
+WINDOW = 30
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -69,20 +69,24 @@ def preprocess_power(f1, f2):
 	df = df[(df['TS'] >= start_time) & (df['TS'] < end_time)]
 	df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
 
-	power = []
+	print (df.shape[0])
+	power = np.zeros((86400))
+	power[0] = df.iloc[0,0]
+	offset = df.iloc[0,1]
+	t = offset
 	for i in range(df.shape[0]):
-		if not power:
-			power.append(df.iloc[i,0])
-		else:
-			if df.iloc[i,1]-df.iloc[i-1,1] == 1.0:
-				power.append(df.iloc[i,0])
-		
-			elif df.iloc[i,1] == df.iloc[i-1,1]:
-				power[-1] = (power[-1]+df.iloc[i,0])/2
+		if df.iloc[i,1] != t:
+			if df.iloc[i,1]-t == 1.0:
+				power[t+1-offset] = df.iloc[i,0]
+				t+=1
 
-			elif df.iloc[i,1]-df.iloc[i-1,1] > 1.0:
-				for j in range(int(df.iloc[i,1]-df.iloc[i-1,1])):
-					power.append(df.iloc[i-1,0])
+			else:
+				orig_t = t
+				for j in range(int(df.iloc[i,1]-orig_t)):
+					power[orig_t+j+1-offset] = df.iloc[i-1,0]
+					t+=1
+		else: 
+			power[t-offset] = (power[t-offset]+df.iloc[i,0])/2
 
 	## Smoothing 
 	print ('Filtering signal ...')
@@ -95,17 +99,17 @@ def detect_peaks(power_f):
 	print ('Detecting Peaks of Signal....')
 	peak_indices, _ = find_peaks(power_f)  # Find peaks returns the actual peaks of derivative
 	final_peaks = power_f[peak_indices]
+	# print (peak_indices)
+	# print (len(final_peaks))
+	# negative_powerf = -1*power_f
+	# peak_indices_min, _ = find_peaks(negative_powerf)  # Find peaks returns the actual peaks of derivative
+	# final_peaks_min = negative_powerf[peak_indices]
+	# print (peak_indices_min)
+	# print (len(final_peaks_min))
+
+	# print ('total points to be considered' , len(final_peaks_min)+len(final_peaks) )
+	# print ('original', len(power_f))
 	return final_peaks, peak_indices 
-
-@timing_wrapper
-def piecewise_approximation(power_f):
-	print ('Finding piece wise approcimation of signal....')
-	samples = []
-	sample_indices = []
-	samples = np.array([power_f[i] for i in range(0,len(power_f),WINDOW)])
-	sample_indices = np.array([ i-1 for i in range(0,len(power_f),WINDOW)])
-	return samples, sample_indices
-
 
 @timing_wrapper
 def signal_to_discrete_states(final_peaks):
@@ -160,6 +164,20 @@ if __name__ == '__main__':
 	file1, file2 = get_required_files(device_path, day)
 	power_f = preprocess_power(file1, file2)
 	final_peaks, peak_indices = detect_peaks(power_f)
+	plt.plot(final_peaks)
+	plt.show()
+	print (len(final_peaks))
+	print (len(power_f))
+	labels = signal_to_discrete_states(final_peaks)
 	fp2 , pi2= detect_peaks(final_peaks)
+	plt.plot(fp2)
+	plt.show()
 	print (len(fp2))
+	print (len(power_f))
 	labels = signal_to_discrete_states(fp2)
+	fp3 , pi3= detect_peaks(fp2)
+	plt.plot(fp3)
+	plt.show()
+	print (len(fp3))
+	print (len(power_f))
+	labels = signal_to_discrete_states(fp3)
