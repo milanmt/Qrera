@@ -69,7 +69,6 @@ def preprocess_power(f1, f2):
 	df = df[(df['TS'] >= start_time) & (df['TS'] < end_time)]
 	df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
 
-	print (df.shape[0])
 	power = np.zeros((86400))
 	power[0] = df.iloc[0,0]
 	offset = int(df.iloc[0,1])
@@ -95,15 +94,19 @@ def preprocess_power(f1, f2):
 	return power_f
 
 @timing_wrapper
-def detect_peaks(power_f):
+def detect_peaks(power_f, order):   ## Order of the derivative required
 	print ('Detecting Peaks of Signal....')
-	peak_indices_max, _ = find_peaks(power_f)  # Find peaks returns the actual peaks of derivative
-	negative_powerf = -1*power_f
-	peak_indices_min, _ = find_peaks(negative_powerf)  # Find peaks returns the actual peaks of derivative
-	peak_indices = []
-	peak_indices.extend(peak_indices_min)
-	peak_indices.extend(peak_indices_max)
-	peak_indices.sort()
+	peak_indices_list = []
+	power_fi = power_f
+	for i in range(order):
+		peak_indicesi, _ = find_peaks(power_fi)
+		power_fi = power_fi[peak_indicesi]
+		peak_indices_list.append(peak_indicesi)
+
+	peak_indices = peak_indices_list[0]
+	for j in range(1,order):
+		peak_indices = peak_indices[peak_indices_list[j]]
+
 	final_peaks = power_f[peak_indices]
 	return final_peaks, peak_indices 
 
@@ -148,32 +151,20 @@ def signal_to_discrete_states(final_peaks):
 
 
 if __name__ == '__main__':
-	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_07'
+	# device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
+	# day = '2018_07_07'
 
-	# device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
-	# day = '2018_09_18'
+	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
+	day = '2018_09_18'
 	
 	# device_path = '/media/milan/DATA/Qrera/AutoAcc/39FFBE'
 	# day = '2018_04_27' #'2017_12_09'
 	
 	file1, file2 = get_required_files(device_path, day)
 	power_f = preprocess_power(file1, file2)
-	final_peaks, peak_indices = detect_peaks(power_f)
+	final_peaks, peak_indices = detect_peaks(power_f,2)
 	plt.plot(final_peaks)
 	plt.show()
 	print (len(final_peaks))
 	print (len(power_f))
 	labels = signal_to_discrete_states(final_peaks)
-	fp2 , pi2= detect_peaks(final_peaks)
-	plt.plot(fp2)
-	plt.show()
-	print (len(fp2))
-	print (len(power_f))
-	labels = signal_to_discrete_states(fp2)
-	fp3 , pi3= detect_peaks(fp2)
-	plt.plot(fp3)
-	plt.show()
-	print (len(fp3))
-	print (len(power_f))
-	labels = signal_to_discrete_states(fp3)
