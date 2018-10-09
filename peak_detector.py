@@ -11,6 +11,7 @@ import time
 import os
 
 N_MAX = 10
+WINDOW = 10
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -97,7 +98,17 @@ def detect_peaks(power_f):
 	return final_peaks, peak_indices 
 
 @timing_wrapper
-def peaks_to_discrete_states(final_peaks):
+def piecewise_approximation(power_f):
+	print ('Finding piece wise approcimation of signal....')
+	samples = []
+	sample_indices = []
+	samples = np.array([power_f[i] for i in range(0,len(power_f),WINDOW)])
+	sample_indices = np.array([ i-1 for i in range(0,len(power_f),WINDOW)])
+	return samples, sample_indices
+
+
+@timing_wrapper
+def signal_to_discrete_states(final_peaks):
 	print ('Discretising Values...')
 	total_peaks = np.array(final_peaks)
 	X = total_peaks.reshape(-1,1)
@@ -137,9 +148,18 @@ def peaks_to_discrete_states(final_peaks):
 
 
 if __name__ == '__main__':
-	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_07'
+	# device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
+	# day = '2018_07_07'
+
+	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
+	day = '2018_09_18'
+	
+	# device_path = '/media/milan/DATA/Qrera/AutoAcc/39FFBE'
+	# day = '2018_04_27' #'2017_12_09'
+	
 	file1, file2 = get_required_files(device_path, day)
 	power_f = preprocess_power(file1, file2)
 	final_peaks, peak_indices = detect_peaks(power_f)
-	labels = peaks_to_discrete_states(final_peaks)
+	fp2 , pi2= detect_peaks(final_peaks)
+	print (len(fp2))
+	labels = signal_to_discrete_states(fp2)
