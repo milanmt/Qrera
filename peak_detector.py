@@ -85,8 +85,7 @@ def preprocess_power(f1, f2):
 					t+=1
 		else: 
 			power[t-offset] = (power[t-offset]+df.iloc[i,0])/2
-
-	
+	return power	
 
 def filter_signal(power):
 	## Smoothing 
