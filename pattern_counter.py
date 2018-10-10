@@ -45,7 +45,7 @@ if __name__ == '__main__':
 	# file1 = 'test_data.csv'
 	# file2 = None
 
-	power_f = pd.preprocess_power(file1, file2)
+	power_f, off_regions = pd.preprocess_power(file1, file2)
 	final_peaks, peak_indices = pd.detect_peaks(power_f,2) ## Order of the derivative
 
 	final_pattern = None
@@ -62,7 +62,7 @@ if __name__ == '__main__':
 		if no_iter >= 5:
 			raise ValueError('Could not find valid pattern. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')
 
-	p_m = ptm.PatternMatching(pm.pattern_dict, state_attributes, array,30,40, peak_indices)
+	p_m = ptm.PatternMatching(pm.pattern_dict, state_attributes, array,30,45, peak_indices)
 	# p_m = ptm.PatternClassification(pm.pattern_dict,state_attributes,array,3,7)
 	p_array, p_indices = p_m.find_matches()
 

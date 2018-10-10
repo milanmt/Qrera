@@ -72,8 +72,8 @@ def preprocess_power(f1, f2):
 	power[0] = df.iloc[0,0]
 	offset = int(df.iloc[0,1])
 	t = offset
-	off_region_indices = []
 	for i in range(1,df.shape[0]):
+		if df.iloc[i,0] == 0.0:
 		if df.iloc[i,1] != t:
 			if df.iloc[i,1]-t == 1.0:
 				power[t+1-offset] = df.iloc[i,0]
@@ -82,19 +82,19 @@ def preprocess_power(f1, f2):
 				orig_t = t
 				req_offset = orig_t+1-offset
 				for j in range(int(df.iloc[i,1]-orig_t)):
-					power[req_offset+j] = df.iloc[i-1,0]
+					power[req_offset+j] = 0
 					t+=1
 		else: 
 			power[t-offset] = (power[t-offset]+df.iloc[i,0])/2
 
-
+	off_regions = [i for i in range(len(power)) if power[i] == 0]
 	## Smoothing 
 	print ('Filtering signal ...')
 	power_f = lpf(power)
 	min_power = np.min(power_f)
 	if min_power < 0:
 		power_f = power_f + abs(min_power)
-	return power_f
+	return power_f, off_regions
 
 @timing_wrapper
 def detect_peaks(power_f, order):   ## Order of the derivative required
