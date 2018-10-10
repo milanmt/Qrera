@@ -1,18 +1,12 @@
 #! /usr/bin/env python3
 
-from scipy.spatial.distance import pdist, squareform
 from sklearn.cluster import AffinityPropagation
 import custompattern_mining as cpm
 from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
-import plotly.graph_objs as go
 import peak_detector as pd 
 from dtw import dtw
 import numpy as np
-import plotly
 import time
-import json
-import os
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -26,45 +20,26 @@ def timing_wrapper(func):
 	return wrapper
 
 
-class SegmentDiscovery:
-	def __init__ (self, no_segments, sequence, state_attributes,min_len, max_len):
-		self.state_attributes = state_attributes
-		self.pm = cpm.PatternMining(sequence, state_attributes, min_len, max_len)
-		self.all_pattern_sets = self.pm.pattern_sets
-		self.patterns = self.__get_patterns()
+class SignalSegmentation:
+	def __init__ (self,min_len, max_len, derivative_order):
+		self.min_len = min_len
+		self.max_len = max_len
+		self.order = derivative_order
+		self.state_attributes = None
+		self.peak_indices = None
+		self.sequence = None
+		self.no_segments = None
+		self.pattern_sequence = None
+		self.pattern_sequence_indices = None
 		self.working_label = None
 		self.idle_label = None
 		self.pattern_dict = None
-		self.no_segments = no_segments
-			
+		self.patterns = None
+		self.power_f = None  # Filetered power
+
 	def __get_patterns(self):
-		seq_support = self.pm.find_patterns()
-		# # Saving data for autoacc
-		# with open('pyn_patterns.txt', 'w') as f:
-		# 	for seq, freq in seq_support:
-		# 		f.write('([')
-		# 		for i in range(len(seq)):
-		# 			if i!= len(seq)-1:
-		# 				f.write('{0}, '.format(seq[i]))
-		# 			else:
-		# 				f.write('{0}], {1})\n'.format(seq[i],freq))
-
-		# ## reading data for auto acc
-		# seq_support = []
-		# with open('pyn2_patterns.txt', 'r') as f:
-		# 	for line in f:
-		# 		to_be_removed = ['[', ']', '(', ')']
-		# 		t_l = line
-		# 		for s in to_be_removed:
-		# 			t_l = t_l.replace(s, '')
-
-		# 		split_t_l = t_l.split(',')
-		# 		seq = [int(s.strip()) for s in split_t_l[:-1]]
-		# 		freq = int(split_t_l[-1].strip())
-		# 		if freq > 1:
-		# 			seq_support.append((seq, freq))
-
-		return seq_support
+		pm = cpm.PatternMining(self.sequence, self.state_attributes, self.min_len, self.max_len)
+		self.patterns = pm.find_patterns()
 
 	def __dtw_clustering(self, seq_f):
 		### Clustering sequences using affinity propagation, dtw
@@ -104,11 +79,9 @@ class SegmentDiscovery:
 		return cluster_subseqs, cluster_subseqs_exs
 
 	@timing_wrapper
-	def cluster_patterns(self, seq_f):
+	def __cluster_patterns(self, seq_f):
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
-		print (cluster_subseqs)
-		print (cluster_subseqs_exs)
 		print ('Number of clusters with DTW: ', len(cluster_subseqs))
 		if len(cluster_subseqs) == 1:
 			return cluster_subseqs, cluster_subseqs_exs, None, None			
@@ -134,8 +107,7 @@ class SegmentDiscovery:
 		idle_label = cluster_norms.index(min(cluster_norms))
 		self.idle_label = idle_label
 		self.working_label = 1 - self.idle_label
-		
-		### Grouping sequences by cluster label -> later inference 
+				
 		cluster_seqs = dict()
 		for e,label in enumerate(cl_mv_labels):
 			if label not in cluster_seqs:
@@ -154,12 +126,13 @@ class SegmentDiscovery:
 		return cluster_seqs
 
 	@timing_wrapper
-	def discover_segmentation_pattern(self):
+	def __discover_segmentation_pattern(self):
+		self.__get_patterns()
 		if len(self.patterns) == 1:
 			self.pattern_dict = {0: [self.patterns[0]]}
 			return self.patterns[0][0]
 		
-		### Looking for signals which start and stop with minimas. Need to doscover most likely candidate. 
+		### Looking for signals which start and stop with minimas. Need to discover most likely candidate. 
 		possible_patterns = []
 		for seq in self.patterns:
 			if all(s >= seq[0][0] for s in seq[0]):
@@ -168,7 +141,7 @@ class SegmentDiscovery:
 		### Clustering with DTW to find patterns. Exemplars from DTW -> final patterns 
 		### These clustered based on mean and variance to identify idle and working patterns
 		if len(possible_patterns) > 1:
-			self.pattern_dict = self.cluster_patterns(possible_patterns)
+			self.pattern_dict = self.__cluster_patterns(possible_patterns)
 		
 		elif len(possible_patterns) == 1:
 			self.pattern_dict = {0: [self.patterns[0]]}
@@ -179,3 +152,75 @@ class SegmentDiscovery:
 		val_b = [self.state_attributes[str(s)][0] for s in b]
 		dist, _, _, _ = dtw(val_a, val_b, dist=lambda x,y:np.linalg.norm(x-y))
 		return dist 
+
+
+	@timing_wrapper
+	def __find_matches(self):
+		print ('Matching Discovered Patterns...')
+		start_ind = 0
+		end_ind = 0
+		pattern_sequence = []
+		pattern_sequence_indices = []
+		while start_ind < len(self.sequence)-1:
+			min_pdist = np.inf
+			for label, p_set in self.pattern_dict.items():
+
+				p_set_d	= [max(p_set, key=lambda x:x[1])]
+				for pattern,freq in p_set_d:
+					dists = []
+					ends = []
+					end_ind_t = start_ind+self.min_len-1
+					while end_ind_t < start_ind+self.max_len:
+						p_temp = self.sequence[start_ind:end_ind_t+1]
+						dist = self.__pattern_distance(p_temp,pattern)
+						dists.append(dist)
+						ends.append(end_ind_t)
+						end_ind_t +=1
+
+					### preferring longer patterns rather than shorter ones 
+					min_dist = min(dists)
+					for e,d in enumerate(dists):
+						if d == min_dist:
+							end_ind_f = ends[e]
+
+					# ### preferring shorter patterns over long ones 
+					# min_dist = min(dists)
+					# end_ind_f = ends[dists.index(min_dist)]
+
+					if min_pdist > min_dist:
+						min_pdist = min_dist
+						end_ind = end_ind_f
+						req_label = label
+
+			pattern_sequence.append(req_label)
+			if end_ind < len(self.sequence):
+				pattern_sequence_indices.append(end_ind)
+			start_ind = end_ind
+		
+		self.pattern_sequence = pattern_sequence
+		self.pattern_sequence_indices = pattern_sequence_indices
+		return pattern_sequence, pattern_sequence_indices
+
+	def segment_signal(self, no_segments,file1,file2):
+		self.power_f, off_regions = pd.preprocess_power(file1, file2)
+		final_peaks, self.peak_indices = pd.detect_peaks(self.power_f,self.order) ## Order of the derivative
+		self.no_segments = no_segments-1
+		no_iter = 1
+		while self.pattern_dict == None:
+			self.sequence, self.state_attributes = pd.signal_to_discrete_states(final_peaks)
+			self.__discover_segmentation_pattern()
+			no_iter += 1
+			if no_iter >= 5:
+				raise ValueError('Could not find segments for signal. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')	
+
+		p_array, p_indices = self.__find_matches()
+
+		print ('Mapping time indices...')
+		simplified_seq = np.zeros((len(self.power_f)))
+		start_ind = 0
+		for e,i in enumerate(p_indices):
+			simplified_seq[start_ind:self.peak_indices[i+1]] = p_array[e]
+			start_ind = self.peak_indices[i+1]
+
+		simplified_seq[off_regions] = no_segments-1
+		return simplified_seq

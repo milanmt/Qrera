@@ -1,16 +1,12 @@
 #! /usr/bin/env python3
 
-import custompattern_mining as cpm
-import signal_segmentation as ptd
+import signal_segmentation as SS
 import matplotlib.pyplot as plt
-import pattern_matching as ptm
 import plotly.graph_objs as go
-import peak_detector as pd 
 import numpy as np
 import plotly
 import json
 import os
-
 
 
 def get_required_files(device_path, day):
@@ -45,35 +41,9 @@ if __name__ == '__main__':
 	# file1 = 'test_data.csv'
 	# file2 = None
 
-	power_f, off_regions = pd.preprocess_power(file1, file2)
-	final_peaks, peak_indices = pd.detect_peaks(power_f,3) ## Order of the derivative
-
-	pattern_dict = None
-	no_iter = 1
-	while pattern_dict == None:
-		array, state_attributes = pd.signal_to_discrete_states(final_peaks)
-		with open('state_attributes.json', 'w') as f:
-			json.dump(state_attributes, f)
-
-		pm = ptd.SegmentDiscovery(2, array, state_attributes, 10,15)
-		pm.discover_segmentation_pattern()
-		pattern_dict = pm.pattern_dict
-		no_iter += 1
-		if no_iter >= 5:
-			raise ValueError('Could not find segments for signal. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')
-
-	p_m = ptm.PatternMatching(pm.pattern_dict, state_attributes, array,10,15, peak_indices)
-	p_array, p_indices = p_m.find_matches()
-
-	print (len(p_indices))
-	print (len(peak_indices))
-
-	print ('Mapping time indices...')
-	simplified_seq = np.zeros((len(power_f)))
-	start_ind = 0
-	for e,i in enumerate(p_indices):
-		simplified_seq[start_ind:peak_indices[i+1]] = p_array[e]
-		start_ind = peak_indices[i]
+	ss = SS.SignalSegmentation(5,15,3)
+	simplified_seq = ss.segment_signal(3, file1, file2)
+	power_f = ss.power_f
 	
 	print ('Plotting...')
 	unique_labels = list(np.unique(simplified_seq))
@@ -84,10 +54,5 @@ if __name__ == '__main__':
 	
 	plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
 	data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
-	pattern_edges = len(time)*[None]
-	for ind in peak_indices[p_indices]:
-		pattern_edges[ind] = power_f[ind]
-	print (len([l for l in pattern_edges if l != None]))
-	data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
 	fig = go.Figure(data = data)
 	plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
