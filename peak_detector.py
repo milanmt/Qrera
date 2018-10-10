@@ -11,7 +11,6 @@ import time
 import os
 
 N_MAX = 10
-WINDOW = 30
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -73,7 +72,8 @@ def preprocess_power(f1, f2):
 	power[0] = df.iloc[0,0]
 	offset = int(df.iloc[0,1])
 	t = offset
-	for i in range(df.shape[0]):
+	off_region_indices = []
+	for i in range(1,df.shape[0]):
 		if df.iloc[i,1] != t:
 			if df.iloc[i,1]-t == 1.0:
 				power[t+1-offset] = df.iloc[i,0]
@@ -82,15 +82,18 @@ def preprocess_power(f1, f2):
 				orig_t = t
 				req_offset = orig_t+1-offset
 				for j in range(int(df.iloc[i,1]-orig_t)):
-					power[req_offset] = df.iloc[i-1,0]
+					power[req_offset+j] = df.iloc[i-1,0]
 					t+=1
 		else: 
 			power[t-offset] = (power[t-offset]+df.iloc[i,0])/2
 
+
 	## Smoothing 
 	print ('Filtering signal ...')
 	power_f = lpf(power)
-
+	min_power = np.min(power_f)
+	if min_power < 0:
+		power_f = power_f + abs(min_power)
 	return power_f
 
 @timing_wrapper
@@ -119,7 +122,7 @@ def signal_to_discrete_states(final_peaks):
 	#### BayesianGaussianMixture
 	gamma = np.std(final_peaks)/(len(final_peaks))
 	print (gamma)
-	dpgmm = BayesianGaussianMixture(n_components=N_MAX,max_iter= 500,covariance_type='spherical', weight_concentration_prior=gamma, random_state=0).fit(X)
+	dpgmm = BayesianGaussianMixture(n_components=N_MAX,max_iter= 500,covariance_type='spherical',random_state=0).fit(X)
 	unordered_labels = dpgmm.predict(X)
 	original_means = [x[0] for x in dpgmm.means_]
 	sorted_means = sorted(dpgmm.means_, key=lambda x:x[0])
@@ -162,7 +165,7 @@ if __name__ == '__main__':
 	
 	file1, file2 = get_required_files(device_path, day)
 	power_f = preprocess_power(file1, file2)
-	final_peaks, peak_indices = detect_peaks(power_f,2)
+	final_peaks, peak_indices = detect_peaks(power_f,3)
 	plt.plot(final_peaks)
 	plt.show()
 	print (len(final_peaks))
