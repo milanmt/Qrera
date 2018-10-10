@@ -45,7 +45,8 @@ if __name__ == '__main__':
 	# file1 = 'test_data.csv'
 	# file2 = None
 
-	power_f, off_regions = pd.preprocess_power(file1, file2)
+	power = pd.preprocess_power(file1, file2)
+	power_f = pd.filter_signal(power)
 	final_peaks, peak_indices = pd.detect_peaks(power_f,2) ## Order of the derivative
 
 	final_pattern = None
