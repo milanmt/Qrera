@@ -70,19 +70,27 @@ def preprocess_power(f1, f2):
 
 	power = np.zeros((86400))
 	power[0] = df.iloc[0,0]
-	offset = int(df.iloc[0,1])
+	offset = df.iloc[0,1]
 	t = offset
 	for i in range(1,df.shape[0]):
 		if df.iloc[i,1] != t:
 			if df.iloc[i,1]-t == 1.0:
 				power[t+1-offset] = df.iloc[i,0]
 				t+=1
+			
+			elif df.iloc[i,1]-t < 5.0:
+				orig_t = t
+				req_offset = orig_t+1-offset
+				for j in range(int(df.iloc[i,1]-orig_t)):
+					power[req_offset+j] = (df.iloc[i,0]+df.iloc[i-1,0])/2
+					t+=1
 			else:
 				orig_t = t
 				req_offset = orig_t+1-offset
 				for j in range(int(df.iloc[i,1]-orig_t)):
 					power[req_offset+j] = 0
 					t+=1
+
 		else: 
 			power[t-offset] = (power[t-offset]+df.iloc[i,0])/2
 	return power	
@@ -100,7 +108,7 @@ def piecewise_approximation(power, WINDOW):
 	print ('Finding piece wise approcimation of signal....')
 	samples = []
 	sample_indices = []
-	samples = np.array([power[i] for i in range(0,len(power),WINDOW)])
+	samples = np.array([np.mean(power[i:i+WINDOW]) for i in range(0,len(power),WINDOW)])
 	return samples
 
 @timing_wrapper
@@ -172,9 +180,9 @@ if __name__ == '__main__':
 	
 	file1, file2 = get_required_files(device_path, day)
 	power_f = preprocess_power(file1, file2)
-	final_peaks, peak_indices = detect_peaks(power_f,3)
-	plt.plot(final_peaks)
+	plt.plot(power_f)
 	plt.show()
+	final_peaks, peak_indices = detect_peaks(power_f,2)
 	print (len(final_peaks))
 	print (len(power_f))
 	labels = signal_to_discrete_states(final_peaks)
