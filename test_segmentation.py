@@ -1,8 +1,10 @@
 #! /usr/bin/env python3
 
 import signal_segmentation as SS
+import signal_clustering as SC
 import matplotlib.pyplot as plt
 import plotly.graph_objs as go
+import peak_detector as pd
 import numpy as np
 import plotly
 import json
@@ -27,11 +29,14 @@ def get_required_files(device_path, day):
 	return file1, file2
 
 if __name__ == '__main__':
-	# device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	# day = '2018_07_09'
 
-	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
-	day = '2018_09_18'
+	no_segments = 3
+
+	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
+	day = '2018_07_09'
+
+	# device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
+	# day = '2018_09_18'
 	
 	# device_path = '/media/milan/DATA/Qrera/AutoAcc/39FFBE'
 	# day = '2018_04_27' #'2017_12_09'
@@ -41,16 +46,23 @@ if __name__ == '__main__':
 	# file1 = 'test_data.csv'
 	# file2 = None
 
-	ss = SS.SignalSegmentation(5,15,3)
-	simplified_seq = ss.segment_signal(3, file1, file2)
-	power_f = ss.power_f
+	power = pd.preprocess_power(file1, file2)
+
+	ss = SS.SignalSegmentation(3,7,1)  ### min_len, max_len, derivative order
+	simplified_seq = ss.segment_signal(no_segments, power)
+	
+	# ss = SC.SignalClustering()
+	# simplified_seq = ss.segment_signal(no_segments,power)
 	
 	print ('Plotting...')
-	unique_labels = list(np.unique(simplified_seq))
+	unique_labels = np.unique(simplified_seq)
 	y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
 	for e,el in enumerate(simplified_seq):
-		y_plot[unique_labels.index(int(el)),e] = power_f[e]
-	time = np.arange(len(power_f))
+		if el == no_segments-1:
+			y_plot[int(el),e] = 1500
+		else:
+			y_plot[int(el),e] = power[e]
+	time = np.arange(len(power))
 	
 	plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
 	data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
