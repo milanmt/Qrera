@@ -1,9 +1,9 @@
 #! /usr/bin/env python3
 
-from sklearn.cluster import AffinityPropagation
+from sklearn.cluster import AffinityPropagation, KMeans
 import custompattern_mining as cpm
-from sklearn.cluster import KMeans
 import peak_detector as pd 
+import matplotlib.pyplot as plt
 from dtw import dtw
 import numpy as np
 import time
@@ -35,7 +35,6 @@ class SignalSegmentation:
 		self.idle_label = None
 		self.pattern_dict = None
 		self.patterns = None
-		self.power_f = None  # Filetered power
 
 	def __get_patterns(self):
 		pm = cpm.PatternMining(self.sequence, self.state_attributes, self.min_len, self.max_len)
@@ -201,9 +200,10 @@ class SignalSegmentation:
 		self.pattern_sequence_indices = pattern_sequence_indices
 		return pattern_sequence, pattern_sequence_indices
 
-	def segment_signal(self, no_segments,file1,file2):
-		self.power_f, off_regions = pd.preprocess_power(file1, file2)
-		final_peaks, self.peak_indices = pd.detect_peaks(self.power_f,self.order) ## Order of the derivative
+	def segment_signal(self, no_segments, power_signal):
+		off_regions = [e for e,p in enumerate(power_signal) if p == 0]
+		power_f = pd.filter_signal(power_signal)
+		final_peaks, self.peak_indices = pd.detect_peaks(power_f,self.order) ## Order of the derivative
 		self.no_segments = no_segments-1
 		no_iter = 1
 		while self.pattern_dict == None:
@@ -216,11 +216,11 @@ class SignalSegmentation:
 		p_array, p_indices = self.__find_matches()
 
 		print ('Mapping time indices...')
-		simplified_seq = np.zeros((len(self.power_f)))
+		simplified_seq = np.zeros((len(power_signal)))
 		start_ind = 0
 		for e,i in enumerate(p_indices):
-			simplified_seq[start_ind:self.peak_indices[i+1]] = p_array[e]
-			start_ind = self.peak_indices[i+1]
+			simplified_seq[start_ind:self.peak_indices[i+1]+2] = p_array[e]
+			start_ind = self.peak_indices[i+1]+2
 
 		simplified_seq[off_regions] = no_segments-1
 		return simplified_seq
