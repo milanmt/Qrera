@@ -35,6 +35,7 @@ class SignalSegmentation:
 		self.idle_label = None
 		self.pattern_dict = None
 		self.patterns = None
+		self.predictor = None
 
 	def __get_patterns(self):
 		pm = cpm.PatternMining(self.sequence, self.state_attributes, self.min_len, self.max_len)
@@ -101,6 +102,7 @@ class SignalSegmentation:
 
 		### KMeans 
 		kmeans = KMeans(self.no_segments, random_state=3).fit(cluster_mv)
+		self.predictor = kmeans
 		cl_mv_labels = kmeans.labels_
 		cluster_norms = [np.linalg.norm(el) for el in kmeans.cluster_centers_]
 		idle_label = cluster_norms.index(min(cluster_norms))
@@ -189,9 +191,11 @@ class SignalSegmentation:
 					if min_pdist > min_dist:
 						min_pdist = min_dist
 						end_ind = end_ind_f
-						req_label = label
 
-			pattern_sequence.append(req_label)
+			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind+1]])
+			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind+1]])
+			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
+			pattern_sequence.append(req_label[0])
 			if end_ind < len(self.sequence):
 				pattern_sequence_indices.append(end_ind)
 			start_ind = end_ind
@@ -220,7 +224,11 @@ class SignalSegmentation:
 		start_ind = 0
 		for e,i in enumerate(p_indices):
 			simplified_seq[start_ind:self.peak_indices[i+1]+2] = p_array[e]
-			start_ind = self.peak_indices[i+1]+2
 
+			if p_array[e] == self.working_label:
+				start_ind = self.peak_indices[i+1]+2
+			else:
+				start_ind = self.peak_indices[i+1]-2
+		
 		simplified_seq[off_regions] = no_segments-1
 		return simplified_seq
