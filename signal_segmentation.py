@@ -164,34 +164,31 @@ class SignalSegmentation:
 		pattern_sequence_indices = []
 		while start_ind < len(self.sequence)-1:
 			min_pdist = np.inf
+			end_ind_l = []
 			for label, p_set in self.pattern_dict.items():
+				pattern, freq	= max(p_set, key=lambda x:x[1])
+					
+				dists = []
+				ends = []
+				end_ind_t = start_ind+self.min_len-1
+				while end_ind_t < start_ind+self.max_len:
+					p_temp = self.sequence[start_ind:end_ind_t+1]
+					dist = self.__pattern_distance(p_temp,pattern)
+					dists.append(dist)
+					ends.append(end_ind_t)
+					end_ind_t +=1
 
-				p_set_d	= [max(p_set, key=lambda x:x[1])]
-				for pattern,freq in p_set_d:
-					dists = []
-					ends = []
-					end_ind_t = start_ind+self.min_len-1
-					while end_ind_t < start_ind+self.max_len:
-						p_temp = self.sequence[start_ind:end_ind_t+1]
-						dist = self.__pattern_distance(p_temp,pattern)
-						dists.append(dist)
-						ends.append(end_ind_t)
-						end_ind_t +=1
+				### preferring longer patterns rather than shorter ones intra pattern
+				min_dist = min(dists)
+				for e,d in enumerate(dists):
+					if d == min_dist:
+						end_ind_f = ends[e]
 
-					### preferring longer patterns rather than shorter ones 
-					min_dist = min(dists)
-					for e,d in enumerate(dists):
-						if d == min_dist:
-							end_ind_f = ends[e]
-
-					# ### preferring shorter patterns over long ones 
-					# min_dist = min(dists)
-					# end_ind_f = ends[dists.index(min_dist)]
-
-					if min_pdist > min_dist:
-						min_pdist = min_dist
-						end_ind = end_ind_f
-
+				if min_pdist >= min_dist:
+					min_pdist = min_dist
+					end_ind_l.append(end_ind_f)
+		
+			end_ind = min(end_ind_l)  ## Shorter patterns inter pattern
 			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind+1]])
 			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind+1]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
@@ -204,6 +201,7 @@ class SignalSegmentation:
 		self.pattern_sequence_indices = pattern_sequence_indices
 		return pattern_sequence, pattern_sequence_indices
 
+	@timing_wrapper
 	def segment_signal(self, no_segments, power_signal):
 		off_regions = [e for e,p in enumerate(power_signal) if p == 0]
 		power_f = pd.filter_signal(power_signal)
@@ -216,19 +214,13 @@ class SignalSegmentation:
 			no_iter += 1
 			if no_iter >= 5:
 				raise ValueError('Could not find segments for signal. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')	
-
 		p_array, p_indices = self.__find_matches()
 
 		print ('Mapping time indices...')
 		simplified_seq = np.zeros((len(power_signal)))
 		start_ind = 0
 		for e,i in enumerate(p_indices):
-			simplified_seq[start_ind:self.peak_indices[i+1]+2] = p_array[e]
-
-			if p_array[e] == self.working_label:
-				start_ind = self.peak_indices[i+1]+2
-			else:
-				start_ind = self.peak_indices[i+1]-2
-		
+			simplified_seq[start_ind:self.peak_indices[i]+2] = p_array[e]
+			start_ind = self.peak_indices[i]+1
 		simplified_seq[off_regions] = no_segments-1
 		return simplified_seq
