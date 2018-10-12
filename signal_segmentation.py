@@ -28,7 +28,6 @@ class SignalSegmentation:
 		self.state_attributes = None
 		self.peak_indices = None
 		self.sequence = None
-		self.no_segments = None
 		self.pattern_sequence = None
 		self.pattern_sequence_indices = None
 		self.working_label = None
@@ -101,7 +100,7 @@ class SignalSegmentation:
 			cluster_mv[label][0] = np.mean(avg_seq_l)
 
 		### KMeans 
-		kmeans = KMeans(self.no_segments, random_state=3).fit(cluster_mv)
+		kmeans = KMeans(2, random_state=3).fit(cluster_mv)
 		self.predictor = kmeans
 		cl_mv_labels = kmeans.labels_
 		cluster_norms = [np.linalg.norm(el) for el in kmeans.cluster_centers_]
@@ -202,11 +201,10 @@ class SignalSegmentation:
 		return pattern_sequence, pattern_sequence_indices
 
 	@timing_wrapper
-	def segment_signal(self, no_segments, power_signal):
+	def segment_signal(self, power_signal):
 		off_regions = [e for e,p in enumerate(power_signal) if p == 0]
 		power_f = pd.filter_signal(power_signal)
 		final_peaks, self.peak_indices = pd.detect_peaks(power_f,self.order) ## Order of the derivative
-		self.no_segments = no_segments-1
 		no_iter = 1
 		while self.pattern_dict == None:
 			self.sequence, self.state_attributes = pd.signal_to_discrete_states(final_peaks)
@@ -221,6 +219,30 @@ class SignalSegmentation:
 		start_ind = 0
 		for e,i in enumerate(p_indices):
 			simplified_seq[start_ind:self.peak_indices[i]+2] = p_array[e]
-			start_ind = self.peak_indices[i]+1
-		simplified_seq[off_regions] = no_segments-1
-		return simplified_seq
+			start_ind = self.peak_indices[i]+2
+		simplified_seq[off_regions] = 2
+
+		print ('Segmenting regions based on time...')
+		unique_labels = list(np.unique(simplified_seq))
+		segmented_regions = dict()
+		for r in unique_labels:
+			
+			start_stop = []
+			started = False
+			for e,s in enumerate(simplified_seq):
+				if r == s and started == False:
+					start = e
+					started = True
+				elif r != s and started == True:
+					stop = e
+					start_stop.append((start,stop))
+					started = False
+			
+			if r == self.working_label:
+				segmented_regions.update({'working_regions':start_stop})
+			elif r == self.idle_label:
+				segmented_regions.update({'idle_regions': start_stop})
+			else:
+				segmented_regions.update({'off_regions': start_stop})
+
+		return simplified_seq, segmented_regions

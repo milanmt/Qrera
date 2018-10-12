@@ -32,11 +32,11 @@ if __name__ == '__main__':
 
 	no_segments = 3
 
-	device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
-	day = '2018_07_09'
+	# device_path = '/media/milan/DATA/Qrera/FWT/5CCF7FD0C7C0'
+	# day = '2018_07_09'
 
-	# device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
-	# day = '2018_09_18'
+	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D'
+	day = '2018_09_04'
 	
 	# device_path = '/media/milan/DATA/Qrera/AutoAcc/39FFBE'
 	# day = '2018_04_27' #'2017_12_09'
@@ -48,18 +48,18 @@ if __name__ == '__main__':
 
 	power = pd.preprocess_power(file1, file2)
 
-	ss = SS.SignalSegmentation(3,7,1)  ### min_len, max_len, derivative order
-	simplified_seq = ss.segment_signal(no_segments, power)
+	ss = SS.SignalSegmentation(3,15,3)  ### min_len, max_len, derivative order
+	simplified_seq, segmented_regions = ss.segment_signal(power)
 	
 	# ss = SC.SignalClustering()
 	# simplified_seq = ss.segment_signal(no_segments,power)
 	
 	print ('Plotting...')
-	unique_labels = np.unique(simplified_seq)
+	unique_labels = list(np.unique(simplified_seq))
 	y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
 	for e,el in enumerate(simplified_seq):
 		if el == no_segments-1:
-			y_plot[int(el),e] = 1500
+			y_plot[unique_labels.index(el),e] = 1500
 		else:
 			y_plot[int(el),e] = power[e]
 	time = np.arange(len(power))
