@@ -35,6 +35,7 @@ class SignalSegmentation:
 		self.pattern_dict = None
 		self.patterns = None
 		self.predictor = None
+		self.off_regions = None
 
 	def __get_patterns(self):
 		pm = cpm.PatternMining(self.sequence, self.state_attributes, self.min_len, self.max_len)
@@ -153,6 +154,19 @@ class SignalSegmentation:
 		dist, _, _, _ = dtw(val_a, val_b, dist=lambda x,y:np.linalg.norm(x-y))
 		return dist 
 
+	def __get_max_limit(self, start_ind):
+		end_ind_t = start_ind+self.min_len-1
+		max_limit = start_ind+self.max_len
+		if self.off_regions:
+			for off_p in self.off_regions: 
+				if off_p in range(self.peak_indices[end_ind_t], self.peak_indices[max_limit-1]+1):
+					for i in range(end_ind_t,max_limit):
+						if off_p > self.peak_indices[i]:
+							return i
+			return max_limit
+		else:
+			return max_limit
+
 
 	@timing_wrapper
 	def __find_matches(self):
@@ -170,7 +184,8 @@ class SignalSegmentation:
 				dists = []
 				ends = []
 				end_ind_t = start_ind+self.min_len-1
-				while end_ind_t < start_ind+self.max_len:
+				max_limit = self.__get_max_limit(start_ind)
+				while end_ind_t < max_limit:
 					p_temp = self.sequence[start_ind:end_ind_t+1]
 					dist = self.__pattern_distance(p_temp,pattern)
 					dists.append(dist)
@@ -187,7 +202,7 @@ class SignalSegmentation:
 					min_pdist = min_dist
 					end_ind_l.append(end_ind_f)
 		
-			end_ind = min(end_ind_l)  ## Shorter patterns inter pattern
+			end_ind = max(end_ind_l)  ## longer patterns inter pattern
 			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind+1]])
 			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind+1]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
@@ -202,7 +217,7 @@ class SignalSegmentation:
 
 	@timing_wrapper
 	def segment_signal(self, power_signal):
-		off_regions = [e for e,p in enumerate(power_signal) if p == 0]
+		self.off_regions = [e for e,p in enumerate(power_signal) if p == 0]
 		power_f = pd.filter_signal(power_signal)
 		final_peaks, self.peak_indices = pd.detect_peaks(power_f,self.order) ## Order of the derivative
 		no_iter = 1
