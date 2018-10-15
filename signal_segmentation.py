@@ -155,16 +155,18 @@ class SignalSegmentation:
 		return dist 
 
 	def __get_end_limits(self, start_ind):
-		end_ind_t = start_ind+1
 		max_limit = start_ind+self.max_len
 		if max_limit-1 >= len(self.peak_indices):
 			max_limit = len(self.peak_indices)
+		min_val = min(self.sequence[start_ind+self.min_len-1:max_limit])
+		print (self.sequence[start_ind+self.min_len-1:max_limit])
+		max_limit = start_ind+self.min_len-1+self.sequence[start_ind+self.min_len-1:max_limit].index(min_val)+1
+		print (start_ind, max_limit)
 		if self.off_regions:
-			for off_p in self.off_regions: 
-				if off_p > self.peak_indices[end_ind_t] and off_p < self.peak_indices[max_limit-1]+1:
-					for i in range(end_ind_t,max_limit):
-						if off_p < self.peak_indices[i]:
-							return i
+			for i in range(start_ind+1,max_limit-1):
+				if any(point in self.off_regions for point in range(self.peak_indices[i],self.peak_indices[i+1]+1)):
+					print ('became off here')
+					return i+1
 			return max_limit
 		else:
 			return max_limit
@@ -180,38 +182,24 @@ class SignalSegmentation:
 		while start_ind < len(self.sequence)-1:
 			min_pdist = np.inf
 			end_ind_l = []
+			end_limit = self.__get_end_limits(start_ind)
 			for label, p_set in self.pattern_dict.items():
-				pattern, freq	= max(p_set, key=lambda x:x[1])
-					
-				dists = []
-				ends = []
-				end_ind_t = start_ind+1
-				max_limit = self.__get_end_limits(start_ind)
-				while end_ind_t < max_limit:
-					p_temp = self.sequence[start_ind:end_ind_t+1]
-					dist = self.__pattern_distance(p_temp,pattern)
-					dists.append(dist)
-					ends.append(end_ind_t)
-					end_ind_t +=1
-
-				### preferring longer patterns rather than shorter ones intra pattern
-				min_dist = min(dists)
-				for e,d in enumerate(dists):
-					if d == min_dist:
-						end_ind_f = ends[e]
-
-				if min_pdist >= min_dist:
-					min_pdist = min_dist
-					end_ind_l.append(end_ind_f)
+				pattern, freq = max(p_set, key=lambda x:x[1])
+				p_temp = self.sequence[start_ind:end_limit]
+				dist = self.__pattern_distance(p_temp,pattern)
+				
+				if min_pdist >= dist:
+					min_pdist = dist
+					r1 = label
 		
-			end_ind = max(end_ind_l)  ## longer patterns inter pattern
-			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind+1]])
-			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind+1]])
+			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_limit]])
+			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_limit]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
+			print (self.sequence[start_ind:end_limit], r1, req_label)
 			pattern_sequence.append(req_label[0])
-			if end_ind < len(self.sequence):
-				pattern_sequence_indices.append(end_ind)
-			start_ind = end_ind
+			if end_limit <= len(self.sequence):
+				pattern_sequence_indices.append(end_limit-1)
+			start_ind = end_limit-1
 		
 		self.pattern_sequence = pattern_sequence
 		self.pattern_sequence_indices = pattern_sequence_indices
@@ -243,7 +231,6 @@ class SignalSegmentation:
 		unique_labels = list(np.unique(simplified_seq))
 		segmented_regions = dict()
 		for r in unique_labels:
-			
 			start_stop = []
 			started = False
 			for e,s in enumerate(simplified_seq):
@@ -261,5 +248,4 @@ class SignalSegmentation:
 				segmented_regions.update({'idle_regions': start_stop})
 			else:
 				segmented_regions.update({'off_regions': start_stop})
-
 		return simplified_seq, segmented_regions
