@@ -154,14 +154,16 @@ class SignalSegmentation:
 		dist, _, _, _ = dtw(val_a, val_b, dist=lambda x,y:np.linalg.norm(x-y))
 		return dist 
 
-	def __get_max_limit(self, start_ind):
-		end_ind_t = start_ind+self.min_len-1
+	def __get_end_limits(self, start_ind):
+		end_ind_t = start_ind+1
 		max_limit = start_ind+self.max_len
+		if max_limit-1 >= len(self.peak_indices):
+			max_limit = len(self.peak_indices)
 		if self.off_regions:
 			for off_p in self.off_regions: 
-				if off_p in range(self.peak_indices[end_ind_t], self.peak_indices[max_limit-1]+1):
+				if off_p > self.peak_indices[end_ind_t] and off_p < self.peak_indices[max_limit-1]+1:
 					for i in range(end_ind_t,max_limit):
-						if off_p > self.peak_indices[i]:
+						if off_p < self.peak_indices[i]:
 							return i
 			return max_limit
 		else:
@@ -183,8 +185,8 @@ class SignalSegmentation:
 					
 				dists = []
 				ends = []
-				end_ind_t = start_ind+self.min_len-1
-				max_limit = self.__get_max_limit(start_ind)
+				end_ind_t = start_ind+1
+				max_limit = self.__get_end_limits(start_ind)
 				while end_ind_t < max_limit:
 					p_temp = self.sequence[start_ind:end_ind_t+1]
 					dist = self.__pattern_distance(p_temp,pattern)
@@ -235,7 +237,7 @@ class SignalSegmentation:
 		for e,i in enumerate(p_indices):
 			simplified_seq[start_ind:self.peak_indices[i]+2] = p_array[e]
 			start_ind = self.peak_indices[i]+2
-		simplified_seq[off_regions] = 2
+		simplified_seq[self.off_regions] = 2
 
 		print ('Segmenting regions based on time...')
 		unique_labels = list(np.unique(simplified_seq))
