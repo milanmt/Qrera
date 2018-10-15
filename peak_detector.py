@@ -70,15 +70,15 @@ def preprocess_power(f1, f2):
 
 	power = np.zeros((86400))
 	power[0] = df.iloc[0,0]
-	offset = df.iloc[0,1]
+	offset = int(df.iloc[0,1])
 	t = offset
 	for i in range(1,df.shape[0]):
-		if df.iloc[i,1] != t:
-			if df.iloc[i,1]-t == 1.0:
+		if int(df.iloc[i,1]) != t:
+			if round(df.iloc[i,1]-t) == 1.0:
 				power[t+1-offset] = df.iloc[i,0]
 				t+=1
 			
-			elif df.iloc[i,1]-t < 5.0:
+			elif int(df.iloc[i,1])-t < 11.0:
 				orig_t = t
 				req_offset = orig_t+1-offset
 				for j in range(int(df.iloc[i,1]-orig_t)):
