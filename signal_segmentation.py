@@ -159,13 +159,13 @@ class SignalSegmentation:
 		if max_limit-1 >= len(self.peak_indices):
 			max_limit = len(self.peak_indices)
 		min_val = min(self.sequence[start_ind+self.min_len-1:max_limit])
-		print (self.sequence[start_ind+self.min_len-1:max_limit])
+		# print (self.sequence[start_ind+self.min_len-1:max_limit])
 		max_limit = start_ind+self.min_len-1+self.sequence[start_ind+self.min_len-1:max_limit].index(min_val)+1
-		print (start_ind, max_limit)
+		# print (start_ind, max_limit)
 		if self.off_regions:
 			for i in range(start_ind+1,max_limit-1):
 				if any(point in self.off_regions for point in range(self.peak_indices[i],self.peak_indices[i+1]+1)):
-					print ('became off here')
+					# print ('became off here')
 					return i+1
 			return max_limit
 		else:
@@ -195,7 +195,7 @@ class SignalSegmentation:
 			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_limit]])
 			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_limit]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
-			print (self.sequence[start_ind:end_limit], r1, req_label)
+			# print (self.sequence[start_ind:end_limit], r1, req_label)
 			pattern_sequence.append(req_label[0])
 			if end_limit <= len(self.sequence):
 				pattern_sequence_indices.append(end_limit-1)
@@ -204,6 +204,18 @@ class SignalSegmentation:
 		self.pattern_sequence = pattern_sequence
 		self.pattern_sequence_indices = pattern_sequence_indices
 		return pattern_sequence, pattern_sequence_indices
+
+	def get_average_working_pattern_length(self):
+		unique_labels, counts = np.unique(self.pattern_sequence, return_counts=True)
+		p_l = 0
+		for e,p in enumerate(self.pattern_sequence):
+			if p == self.working_label:
+				if e == 0:
+					p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[0]]
+				else:
+					p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[e-1]]
+		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
+
 
 	@timing_wrapper
 	def segment_signal(self, power_signal):
