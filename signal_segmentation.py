@@ -117,6 +117,13 @@ class SignalSegmentation:
 			else:
 				cluster_seqs[label].extend(cluster_subseqs[e])
 
+		for label in cluster_seqs:
+			possible_patterns = cluster_seqs[label]
+			for seq in possible_patterns:
+				for subseq in possible_patterns:
+					if seq != subseq and seq_contains(seq[0],subseq[0]):
+						del possible_patterns[possible_patterns.index(subseq)]
+
 		### Printing values
 		print ('Final Number of Clusters: ', len(cluster_seqs))
 		print ('Idle Class: ', idle_label)
