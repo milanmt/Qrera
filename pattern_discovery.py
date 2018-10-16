@@ -34,9 +34,9 @@ class PatternDiscovery:
 		self.classification_dict = None
 		
 	def __get_patterns(self):
-		seq_support = self.pm.find_patterns()
+		# seq_support = self.pm.find_patterns()
 		# # Saving data for autoacc
-		# with open('autoacc_patterns.txt', 'w') as f:
+		# with open('pyn_patterns.txt', 'w') as f:
 		# 	for seq, freq in seq_support:
 		# 		f.write('([')
 		# 		for i in range(len(seq)):
@@ -46,19 +46,19 @@ class PatternDiscovery:
 		# 				f.write('{0}], {1})\n'.format(seq[i],freq))
 
 		## reading data for auto acc
-		# seq_support = []
-		# with open('fwt_patterns.txt', 'r') as f:
-		# 	for line in f:
-		# 		to_be_removed = ['[', ']', '(', ')']
-		# 		t_l = line
-		# 		for s in to_be_removed:
-		# 			t_l = t_l.replace(s, '')
+		seq_support = []
+		with open('pyn2_patterns.txt', 'r') as f:
+			for line in f:
+				to_be_removed = ['[', ']', '(', ')']
+				t_l = line
+				for s in to_be_removed:
+					t_l = t_l.replace(s, '')
 
-		# 		split_t_l = t_l.split(',')
-		# 		seq = [int(s.strip()) for s in split_t_l[:-1]]
-		# 		freq = int(split_t_l[-1].strip())
-		# 		if freq > 1:
-		# 			seq_support.append((seq, freq))
+				split_t_l = t_l.split(',')
+				seq = [int(s.strip()) for s in split_t_l[:-1]]
+				freq = int(split_t_l[-1].strip())
+				if freq > 1:
+					seq_support.append((seq, freq))
 
 		return seq_support
 
@@ -103,6 +103,8 @@ class PatternDiscovery:
 	def cluster_patterns(self, seq_f):
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
+		print (cluster_subseqs)
+		print (cluster_subseqs_exs)
 		print ('Number of clusters with DTW: ', len(cluster_subseqs))
 		if len(cluster_subseqs) == 1:
 			return cluster_subseqs, cluster_subseqs_exs, None, None			
@@ -147,6 +149,7 @@ class PatternDiscovery:
 			else:
 				cluster_seqs[label].extend(cluster_subseqs[e])
 
+		print (cluster_seqs)
 		labels_to_remove = []
 		### Checking if clusters have to be removed
 		for l,p_set in cluster_seqs.items():
@@ -179,25 +182,25 @@ class PatternDiscovery:
 
 
 		### Pattern dictionary for classification
-		new_cluster_dict = dict()
-		for e,label in enumerate(cl_mv_labels):
-			full_list = []
-			for pattern,f in cluster_subseqs[e]:
-				for p, p_dict in self.pm.pattern_sets.items():
-					if self.__pattern_distance(p,pattern) == 0.0:
-						for p_s, f in p_dict.items():
-							full_list.append((list(p_s),f))
+		# new_cluster_dict = dict()
+		# for e,label in enumerate(cl_mv_labels):
+		# 	full_list = []
+		# 	for pattern,f in cluster_subseqs[e]:
+		# 		for p, p_dict in self.pm.pattern_sets.items():
+		# 			if self.__pattern_distance(p,pattern) == 0.0:
+		# 				for p_s, f in p_dict.items():
+		# 					full_list.append((list(p_s),f))
 
 
-			if label not in new_cluster_dict:
-				new_cluster_dict.update({label : full_list})
-			else:
-				new_cluster_dict[label].extend(full_list)
+		# 	if label not in new_cluster_dict:
+		# 		new_cluster_dict.update({label : full_list})
+		# 	else:
+		# 		new_cluster_dict[label].extend(full_list)
 
-		self.classification_dict = new_cluster_dict
-		for k in new_cluster_dict:
-			print (k)
-			print (new_cluster_dict[k])
+		# self.classification_dict = new_cluster_dict
+		# for k in new_cluster_dict:
+		# 	print (k)
+		# 	print (new_cluster_dict[k])
 
 		return cluster_seqs, working_patterns, idle_patterns 
 
@@ -244,14 +247,23 @@ class PatternDiscovery:
 
 
 def seq_contains(seq, subseq):
-	#### Should make this dtw
-	seq_s = str()
-	for x in seq:
-		seq_s = seq_s + str(x)
-	subseq_s = str()
-	for x in subseq:
-		subseq_s = subseq_s + str(x)
-	if subseq_s in seq_s:
-		return True
-	else:
-		return False 
+	if len(subseq) > len(seq):
+		return False
+	start_p = []
+	for e,s in enumerate(seq):
+		if s == subseq[0]:
+			start_p.append(e)
+	end_p = []
+	for e,s in enumerate(seq):
+		if s == subseq[-1]:
+			end_p.append(e)
+	if not (start_p and end_p):
+		return False
+
+	for start_ind in start_p:
+		for end_ind in end_p:
+			if end_ind > start_ind:
+				dist,_,_,_=  dtw(subseq, seq[start_ind:end_ind+1], dist=lambda x,y:np.linalg.norm(x-y))
+				if dist == 0:
+					return True
+	return False
