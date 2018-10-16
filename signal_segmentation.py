@@ -68,8 +68,7 @@ class SignalSegmentation:
 		freq = 2*p_dist_max*freq/max(freq)
 		ap = AffinityPropagation(affinity='precomputed', preference=freq)
 		ap.fit(p_dist)
-		cluster_subseqs_exs = [ seq[ind] for ind in ap.cluster_centers_indices_]
-
+		
 		### Arranging sequences by cluster label 
 		cluster_subseqs = dict()
 		for seq, label in zip(seq_f,ap.labels_):
@@ -78,15 +77,15 @@ class SignalSegmentation:
 			else:
 				cluster_subseqs[label].append(seq)
 				
-		return cluster_subseqs, cluster_subseqs_exs
+		return cluster_subseqs
 
 	@timing_wrapper
 	def __cluster_patterns(self, seq_f):
 		### Clustering sequences using dtw and affinity propagation
-		cluster_subseqs, cluster_subseqs_exs = self.__dtw_clustering(seq_f)
+		cluster_subseqs = self.__dtw_clustering(seq_f)
 		print ('Number of clusters with DTW: ', len(cluster_subseqs))
 		if len(cluster_subseqs) == 1:
-			return cluster_subseqs, cluster_subseqs_exs, None, None			
+			return cluster_subseqs			
 		
 		### Getting average variances and means of exemplars for classification
 		cluster_mv = np.zeros((len(cluster_subseqs),2))
@@ -222,7 +221,6 @@ class SignalSegmentation:
 		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
 		return cycle_time
 
-
 	@timing_wrapper
 	def segment_signal(self, power_signal):
 		self.off_regions = [e for e,p in enumerate(power_signal) if p == 0]
@@ -290,8 +288,3 @@ def seq_contains(seq, subseq):
 				if dist == 0:
 					return True
 	return False
-
-if __name__ == '__main__':
-	a = [1, 1, 9, 9, 8, 8, 2, 8, 2, 9, 8, 2, 2, 1]
-	b = [2, 9, 8, 2, 2]
-	print (seq_contains(a,b))	 
