@@ -163,15 +163,7 @@ class SignalSegmentation:
 		return dist 
 
 	def __get_end_limits(self, start_ind):
-		init_ind = start_ind+self.min_len-1
 		max_limit = start_ind+self.max_len
-		if max_limit-1 >= len(self.peak_indices):
-			max_limit = len(self.peak_indices)
-		if init_ind >= len(self.peak_indices):
-			init_ind = start_ind
-			return max_limit
-		min_val = min(self.sequence[init_ind:max_limit])
-		max_limit = init_ind+self.sequence[init_ind:max_limit].index(min_val)+1
 		if self.off_regions:
 			for i in range(start_ind+1,max_limit-1):
 				if any(point in self.off_regions for point in range(self.peak_indices[i],self.peak_indices[i+1]+1)):
@@ -187,29 +179,40 @@ class SignalSegmentation:
 		start_ind = 0
 		pattern_sequence = []
 		pattern_sequence_indices = []
+		end_ind_l = []
+		min_pdist = np.inf
+		max_limit = self.__get_end_limits(start_ind)
 		while start_ind < len(self.sequence)-1:
-			# print (len(self.sequence), len(self.peak_indices))
-			min_pdist = np.inf
-			end_limit = self.__get_end_limits(start_ind)
-			# print (start_ind, end_limit)
-			
 			for label, p_set in self.pattern_dict.items():
-				pattern, freq = max(p_set, key=lambda x:x[1])
-				p_temp = self.sequence[start_ind:end_limit]
-				dist = self.__pattern_distance(p_temp,pattern)
+				pattern, freq	= max(p_set, key=lambda x:x[1])	
+				dists = []
+				ends = []
+				end_ind_t = start_ind+self.min_len
+				while end_ind_t < max_limit:
+					p_temp = self.sequence[start_ind:end_ind_t]
+					dist = self.__pattern_distance(p_temp,pattern)
+					dists.append(dist)
+					ends.append(end_ind_t)
+					end_ind_t +=1
 				
-				if min_pdist >= dist:
-					min_pdist = dist
-					r1 = label
+				### preferring longer patterns rather than shorter ones intra pattern
+				min_dist = min(dists)
+				for e,d in enumerate(dists):
+					if d == min_dist:
+						end_ind_f = ends[e]
+				
+				if min_pdist >= min_dist:
+					min_pdist = min_dist
+					end_ind_l.append(end_ind_f)
 		
-			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_limit]])
-			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_limit]])
+			end_ind = max(end_ind_l)  ## longer patterns inter pattern
+			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
+			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
-			# print (self.sequence[start_ind:end_limit], r1, req_label)
 			pattern_sequence.append(req_label[0])
-			if end_limit <= len(self.sequence):
-				pattern_sequence_indices.append(end_limit-1)
-			start_ind = end_limit-1
+			if end_ind <= len(self.sequence):
+				pattern_sequence_indices.append(end_ind-1)
+			start_ind = end_ind-1
 		
 		self.pattern_sequence = pattern_sequence
 		self.pattern_sequence_indices = pattern_sequence_indices
