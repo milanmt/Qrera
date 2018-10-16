@@ -40,6 +40,8 @@ class SignalSegmentation:
 	def __get_patterns(self):
 		pm = cpm.PatternMining(self.sequence, self.state_attributes, self.min_len, self.max_len)
 		self.patterns = pm.find_patterns()
+		if len(self.patterns) == 1:
+			raise ValueError('Required number of patterns not found')
 
 	def __dtw_clustering(self, seq_f):
 		### Clustering sequences using affinity propagation, dtw
@@ -155,17 +157,18 @@ class SignalSegmentation:
 		return dist 
 
 	def __get_end_limits(self, start_ind):
+		init_ind = start_ind+self.min_len-1
 		max_limit = start_ind+self.max_len
 		if max_limit-1 >= len(self.peak_indices):
 			max_limit = len(self.peak_indices)
-		min_val = min(self.sequence[start_ind+self.min_len-1:max_limit])
-		# print (self.sequence[start_ind+self.min_len-1:max_limit])
-		max_limit = start_ind+self.min_len-1+self.sequence[start_ind+self.min_len-1:max_limit].index(min_val)+1
-		# print (start_ind, max_limit)
+		if init_ind >= len(self.peak_indices):
+			init_ind = start_ind
+			return max_limit
+		min_val = min(self.sequence[init_ind:max_limit])
+		max_limit = init_ind+self.sequence[init_ind:max_limit].index(min_val)+1
 		if self.off_regions:
 			for i in range(start_ind+1,max_limit-1):
 				if any(point in self.off_regions for point in range(self.peak_indices[i],self.peak_indices[i+1]+1)):
-					# print ('became off here')
 					return i+1
 			return max_limit
 		else:
@@ -176,13 +179,14 @@ class SignalSegmentation:
 	def __find_matches(self):
 		print ('Matching Discovered Patterns...')
 		start_ind = 0
-		end_ind = 0
 		pattern_sequence = []
 		pattern_sequence_indices = []
 		while start_ind < len(self.sequence)-1:
+			# print (len(self.sequence), len(self.peak_indices))
 			min_pdist = np.inf
-			end_ind_l = []
 			end_limit = self.__get_end_limits(start_ind)
+			# print (start_ind, end_limit)
+			
 			for label, p_set in self.pattern_dict.items():
 				pattern, freq = max(p_set, key=lambda x:x[1])
 				p_temp = self.sequence[start_ind:end_limit]
@@ -214,7 +218,9 @@ class SignalSegmentation:
 					p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[0]]
 				else:
 					p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[e-1]]
+		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
 		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
+		return cycle_time
 
 
 	@timing_wrapper
@@ -261,3 +267,31 @@ class SignalSegmentation:
 			else:
 				segmented_regions.update({'off_regions': start_stop})
 		return simplified_seq, segmented_regions
+
+	
+def seq_contains(seq, subseq):
+	if len(subseq) > len(seq):
+		return False
+	start_p = []
+	for e,s in enumerate(seq):
+		if s == subseq[0]:
+			start_p.append(e)
+	end_p = []
+	for e,s in enumerate(seq):
+		if s == subseq[-1]:
+			end_p.append(e)
+	if not (start_p and end_p):
+		return False
+
+	for start_ind in start_p:
+		for end_ind in end_p:
+			if end_ind > start_ind:
+				dist,_,_,_=  dtw(subseq, seq[start_ind:end_ind+1], dist=lambda x,y:np.linalg.norm(x-y))
+				if dist == 0:
+					return True
+	return False
+
+if __name__ == '__main__':
+	a = [1, 1, 9, 9, 8, 8, 2, 8, 2, 9, 8, 2, 2, 1]
+	b = [2, 9, 8, 2, 2]
+	print (seq_contains(a,b))	 
