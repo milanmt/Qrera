@@ -1,12 +1,14 @@
 #! /usr/bin/env python3
 
 from sklearn.cluster import AffinityPropagation, KMeans
-from scipy.signal import find_peaks, butter, filtfilt
+from scipy.signal import find_peaks, butter, filtfilt, savgol_filter
 from sklearn.mixture import BayesianGaussianMixture
 from dtw import dtw
 import pandas as pd
 import numpy as np
 import time
+import matplotlib.pyplot as plt
+
 
 class SinglePatternError(Exception):
 	pass
@@ -213,12 +215,7 @@ class PatternLength:
 			else: 
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
-		### Filtering
-		b, a = butter(3, 0.5)
-		power_f = filtfilt(b, a, self.power)
-		min_power = np.min(power_f)
-		if min_power < 0:
-			power_f = power_f + abs(min_power)
+		power_f = self.power ## No filtering
 		
 		### Detecting Peaks
 		peak_indices_list = []
@@ -265,9 +262,10 @@ class PatternLength:
 		max_limit = start_ind+self.max_len
 		if max_limit-1 >= len(self.__peak_indices):
 			max_limit = len(self.__peak_indices)
+			return max_limit
 		if init_ind >= len(self.__peak_indices):
- 			init_ind = start_ind
-		return max_limit
+			init_ind = start_ind
+			return max_limit
 		min_val = min(self.__sequence[init_ind:max_limit])
 		max_limit = init_ind+self.__sequence[init_ind:max_limit].index(min_val)+1
 		if self.__off_regions:
