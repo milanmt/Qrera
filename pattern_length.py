@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 from sklearn.cluster import AffinityPropagation, KMeans
-from scipy.signal import find_peaks, butter, filtfilt, savgol_filter
+from scipy.signal import find_peaks, butter, filtfilt
 from sklearn.mixture import BayesianGaussianMixture
 from dtw import dtw
 import pandas as pd
@@ -215,8 +215,17 @@ class PatternLength:
 			else: 
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
-		power_f = self.power ## No filtering
+		### Filtering
+		# b, a = butter(3, 0.6)
+		# power_f = filtfilt(b, a, self.power)
+		# min_power = np.min(power_f)
+		# if min_power < 0:
+		# 	power_f = power_f + abs(min_power)
 		
+		# plt.plot(self.power, color='g')
+		# plt.plot(power_f)
+		# plt.show()
+		power_f = self.power
 		### Detecting Peaks
 		peak_indices_list = []
 		power_fi = power_f
@@ -258,16 +267,10 @@ class PatternLength:
 		return dist
 
 	def __get_end_limits(self, start_ind):
-		init_ind = start_ind+self.min_len-1
 		max_limit = start_ind+self.max_len
 		if max_limit-1 >= len(self.__peak_indices):
 			max_limit = len(self.__peak_indices)
 			return max_limit
-		if init_ind >= len(self.__peak_indices):
-			init_ind = start_ind
-			return max_limit
-		min_val = min(self.__sequence[init_ind:max_limit])
-		max_limit = init_ind+self.__sequence[init_ind:max_limit].index(min_val)+1
 		if self.__off_regions:
 			for i in range(start_ind+1,max_limit-1):
 				if any(point in self.__off_regions for point in range(self.__peak_indices[i],self.__peak_indices[i+1]+1)):
@@ -281,22 +284,33 @@ class PatternLength:
 		start_ind = 0
 		pattern_sequence = []
 		pattern_sequence_indices = []
-		while start_ind < len(self.__sequence)-1:
-			min_pdist = np.inf
+		while start_ind < len(self.__sequence)-self.min_len:
+			dist_end_pattern = []
 			end_limit = self.__get_end_limits(start_ind)
 			for label, p_set in self.__pattern_dict.items():
 				pattern, freq = max(p_set, key=lambda x:x[1])
-				p_temp = self.__sequence[start_ind:end_limit]
-				dist = self.__pattern_distance(p_temp,pattern)	
-				if min_pdist >= dist:
-					min_pdist = dist
-			p_mean = np.mean([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_limit]])
-			p_var = np.std([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_limit]])
+				end_t = start_ind + self.min_len
+				dist_t_pattern = []
+				if end_t > end_limit:
+					end_t = end_limit
+				while end_t <= end_limit:
+					p_temp = self.__sequence[start_ind:end_t]
+					dist_t_pattern.append(self.__pattern_distance(p_temp, pattern))
+					end_t +=1
+				min_dist_t = min(dist_t_pattern)
+				end_ind_p  = len(dist_t_pattern)-1 - dist_t_pattern[::-1].index(min_dist_t) ## Longest length within same pattern
+				dist_end_pattern.append((min_dist_t, end_ind_p))
+				
+			dist_end_pattern.sort(key=lambda x:x[1])
+			min_dist, end = min(dist_end_pattern, key=lambda x:x[0]) 
+			end_ind = start_ind + self.min_len + end
+			p_mean = np.mean([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
+			p_var = np.std([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			req_label = self.__pattern_predictor.predict(np.array([[p_mean, p_var]]))
 			pattern_sequence.append(req_label[0])
-			if end_limit <= len(self.__sequence):
-				pattern_sequence_indices.append(end_limit-1)
-			start_ind = end_limit-1
+			if end_ind <= len(self.__sequence):
+				pattern_sequence_indices.append(end_ind-1)
+			start_ind = end_ind-1
 		return pattern_sequence, pattern_sequence_indices
 
 	def __seq_contains(self, seq, subseq):
@@ -336,3 +350,7 @@ class PatternLength:
 		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
 		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
 		return cycle_time
+
+
+
+#### plot and check whats going wrong
