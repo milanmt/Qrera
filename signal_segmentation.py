@@ -167,12 +167,12 @@ class SignalSegmentation:
 		if self.off_regions:
 			for i in range(start_ind+1,max_limit+1):
 				if i+1 >= len(self.peak_indices):
-					return len(self.peak_indices)
+					return len(self.peak_indices), False
 				if any(point in self.off_regions for point in range(self.peak_indices[i],self.peak_indices[i+1]+1)):
-					return i+1
-			return max_limit
+					return i+1, True
+			return max_limit, False
 		else:
-			return max_limit
+			return max_limit, False
 
 
 	@timing_wrapper
@@ -183,7 +183,7 @@ class SignalSegmentation:
 		pattern_sequence_indices = []
 		while start_ind < len(self.sequence)-self.min_len:
 			min_pdist = []
-			max_limit = self.__get_end_limits(start_ind)
+			max_limit, off_region_present = self.__get_end_limits(start_ind)
 			end_ind_l = []
 			req_labels = []
 			# print (start_ind, max_limit)
@@ -227,7 +227,7 @@ class SignalSegmentation:
 			if end_ind <= len(self.sequence):
 				pattern_sequence_indices.append(end_ind-1)
 
-			if max_limit < start_ind+self.max_len: ### Incase of off region, start after the off region
+			if off_region_present: ### Incase of off region, start after the off region
 				start_ind = end_ind
 				pattern_sequence.append(2) ## off region
 				pattern_sequence_indices.append(end_ind)
