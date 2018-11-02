@@ -165,10 +165,10 @@ class SignalSegmentation:
 	def __get_end_limits(self, start_ind):
 		max_limit = start_ind+self.max_len
 		if self.off_regions:
-			for i in range(start_ind+1,max_limit+1):
+			for i in range(start_ind, max_limit+1):
 				if i+1 >= len(self.peak_indices):
 					return len(self.peak_indices), False
-				if any(point in self.off_regions for point in range(self.peak_indices[i],self.peak_indices[i+1]+1)):
+				if any(point in range(self.peak_indices[i],self.peak_indices[i+1]+1) for point in self.off_regions):
 					return i+1, True
 			return max_limit, False
 		else:
@@ -229,8 +229,6 @@ class SignalSegmentation:
 
 			if off_region_present: ### Incase of off region, start after the off region
 				start_ind = end_ind
-				pattern_sequence.append(2) ## off region
-				pattern_sequence_indices.append(end_ind)
 			else:
 				start_ind = end_ind-1
 		
@@ -239,6 +237,21 @@ class SignalSegmentation:
 		return pattern_sequence, pattern_sequence_indices
 
 	def get_average_working_pattern_length(self):
+		unique_labels, counts = np.unique(self.pattern_sequence, return_counts=True)
+		p_l = 0
+		for e,p in enumerate(self.pattern_sequence):
+			if p == self.working_label:
+				if e == 0:
+					if not any(point in range(self.peak_indices[self.pattern_sequence_indices[e]],self.peak_indices[self.pattern_sequence_indices[0]]+1) for point in self.off_regions):
+						p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[0]]
+				else:
+					if not any(point in range(self.peak_indices[self.pattern_sequence_indices[e]],self.peak_indices[self.pattern_sequence_indices[e-1]]+1) for point in self.off_regions):
+						p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[e-1]]
+		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
+		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
+		return cycle_time
+
+	def get_average_working_pattern_length_old(self):
 		unique_labels, counts = np.unique(self.pattern_sequence, return_counts=True)
 		p_l = 0
 		for e,p in enumerate(self.pattern_sequence):
@@ -266,20 +279,20 @@ class SignalSegmentation:
 		p_array, p_indices = self.__find_matches()
 
 		print ('Mapping time indices...')
-		simplified_seq = np.zeros((len(power_signal)))
+		self.simplified_seq = np.zeros((len(power_signal)))
 		start_ind = 0
 		for e,i in enumerate(p_indices):
-			simplified_seq[start_ind:self.peak_indices[i]+2] = p_array[e]
+			self.simplified_seq[start_ind:self.peak_indices[i]+2] = p_array[e]
 			start_ind = self.peak_indices[i]+2
-		# simplified_seq[self.off_regions] = 2
+		self.simplified_seq[self.off_regions] = 2
 
 		print ('Segmenting regions based on time...')
-		unique_labels = list(np.unique(simplified_seq))
+		unique_labels = list(np.unique(self.simplified_seq))
 		segmented_regions = dict()
 		for r in unique_labels:
 			start_stop = []
 			started = False
-			for e,s in enumerate(simplified_seq):
+			for e,s in enumerate(self.simplified_seq):
 				if r == s and started == False:
 					start = e
 					started = True
@@ -294,7 +307,7 @@ class SignalSegmentation:
 				segmented_regions.update({'idle_regions': start_stop})
 			else:
 				segmented_regions.update({'off_regions': start_stop})
-		return simplified_seq, segmented_regions
+		return self.simplified_seq, segmented_regions
 
 	
 def seq_contains(seq, subseq):
