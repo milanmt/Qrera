@@ -165,7 +165,7 @@ class SignalSegmentation:
 	def __get_end_limits(self, start_ind):
 		max_limit = start_ind+self.max_len
 		if self.off_regions:
-			for i in range(start_ind+1,max_limit-1):
+			for i in range(start_ind+1,max_limit+1):
 				if i+1 >= len(self.peak_indices):
 					return len(self.peak_indices)
 				if any(point in self.off_regions for point in range(self.peak_indices[i],self.peak_indices[i+1]+1)):
@@ -226,7 +226,13 @@ class SignalSegmentation:
 			pattern_sequence.append(req_label[0])
 			if end_ind <= len(self.sequence):
 				pattern_sequence_indices.append(end_ind-1)
-			start_ind = end_ind-1
+
+			if max_limit < start_ind+self.max_len: ### Incase of off region, start after the off region
+				start_ind = end_ind
+				pattern_sequence.append(2) ## off region
+				pattern_sequence_indices.append(end_ind)
+			else:
+				start_ind = end_ind-1
 		
 		self.pattern_sequence = pattern_sequence
 		self.pattern_sequence_indices = pattern_sequence_indices
@@ -265,7 +271,7 @@ class SignalSegmentation:
 		for e,i in enumerate(p_indices):
 			simplified_seq[start_ind:self.peak_indices[i]+2] = p_array[e]
 			start_ind = self.peak_indices[i]+2
-		simplified_seq[self.off_regions] = 2
+		# simplified_seq[self.off_regions] = 2
 
 		print ('Segmenting regions based on time...')
 		unique_labels = list(np.unique(simplified_seq))
