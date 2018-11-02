@@ -8,7 +8,17 @@ import pandas as pd
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+import plotly.graph_objs as go
+import plotly
 
+def timing_wrapper(func):
+	def wrapper(*args,**kwargs):
+		t0= time.time()
+		func_val = func(*args,**kwargs)
+		time_taken = time.time() - t0
+		print (str(func),' took: ', time_taken)
+		return func_val
+	return wrapper
 
 class SinglePatternError(Exception):
 	pass
@@ -91,6 +101,7 @@ class PatternLength:
 
 		return patterns_unique
 		
+	@timing_wrapper
 	def __discover_patterns(self):
 		print ('Discovering Patterns...')
 		patterns = self.__mine_patterns()	
@@ -187,6 +198,7 @@ class PatternLength:
 						del possible_patterns[possible_patterns.index(subseq)]
 		return cluster_seqs
 
+	@ timing_wrapper
 	def __preprocess_power(self, df):
 		print ('Preprocessing power...')
 		### Preprocessing
@@ -216,16 +228,18 @@ class PatternLength:
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
 		### Filtering
-		# b, a = butter(3, 0.6)
-		# power_f = filtfilt(b, a, self.power)
-		# min_power = np.min(power_f)
-		# if min_power < 0:
-		# 	power_f = power_f + abs(min_power)
+		b, a = butter(3, 0.5)
+		power_f = filtfilt(b, a, self.power)
+		min_power = np.min(power_f)
+		if min_power < 0:
+			power_f = power_f + abs(min_power)
 		
 		# plt.plot(self.power, color='g')
 		# plt.plot(power_f)
 		# plt.show()
-		power_f = self.power
+		
+		# power_f = self.power ## No filtering
+		
 		### Detecting Peaks
 		peak_indices_list = []
 		power_fi = power_f
@@ -241,6 +255,7 @@ class PatternLength:
 
 		return final_peaks, peak_indices
 		
+	@timing_wrapper
 	def __discretise_power(self, final_peaks):
 		print ('Discretising power...')
 		### Discretising Values
@@ -268,17 +283,17 @@ class PatternLength:
 
 	def __get_end_limits(self, start_ind):
 		max_limit = start_ind+self.max_len
-		if max_limit-1 >= len(self.__peak_indices):
-			max_limit = len(self.__peak_indices)
-			return max_limit
 		if self.__off_regions:
 			for i in range(start_ind+1,max_limit-1):
+				if i+1 >= len(self.__peak_indices):
+					return len(self.__peak_indices)
 				if any(point in self.__off_regions for point in range(self.__peak_indices[i],self.__peak_indices[i+1]+1)):
 					return i+1
 			return max_limit
 		else:
 			return max_limit
 
+	@timing_wrapper
 	def __find_matches(self):
 		print ('Finding matches for patterns...')
 		start_ind = 0
@@ -340,6 +355,17 @@ class PatternLength:
 		print ('Getting Average Cycle Time...')
 		p_array, p_indices = self.__find_matches()
 		unique_labels, counts = np.unique(p_array, return_counts=True)
+
+
+		print ('Mapping time indices...')
+		simplified_seq = np.zeros((len(self.power)))
+		start_ind = 0
+		for e,i in enumerate(p_indices):
+			simplified_seq[start_ind:self.__peak_indices[i]+2] = p_array[e]
+			start_ind = self.__peak_indices[i]+2
+		simplified_seq[self.__off_regions] = 2
+
+
 		p_l = 0
 		for e,p in enumerate(p_array):
 			if p == self.working_label:
@@ -349,8 +375,31 @@ class PatternLength:
 					p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[e-1]]
 		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
 		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
+
+		print ('Plotting...')
+		unique_labels = list(np.unique(simplified_seq))
+		y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
+		for e,el in enumerate(simplified_seq):
+			if el == 2:
+				y_plot[unique_labels.index(el),e] = 1500
+			else:
+				y_plot[int(el),e] = self.power[e]
+		time = np.arange(len(self.power))
+	
+		plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
+		data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
+		pattern_edges = len(time)*[None]
+		for ind in self.__peak_indices[p_indices]:
+			pattern_edges[ind] = self.power[ind]
+		# print (len([l for l in pattern_edges if l != None]))
+		data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
+		fig = go.Figure(data = data)
+		plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
 		return cycle_time
 
 
-
-#### plot and check whats going wrong
+##### TRANSFER THE CURRENT SIGNAL SEGMENTATION EXACTLY HOW IT IS.
+## if off region present, consider the signal to the max limit only
+## break of only when a low partition state comes.
+### correct partitioning
+## additional time due to loading?
