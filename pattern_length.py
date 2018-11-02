@@ -67,7 +67,7 @@ class PatternLength:
 		pattern_sets = dict()
 		patterns_unique = []
 		min_states, max_states = self.__partition_states()
-		for init_ind in range(len(self.__sequence)-2):
+		for init_ind in range(len(self.__sequence)-self.min_len):
 			if self.__sequence[init_ind] in min_states:
 				p_temp = self.__sequence[init_ind:init_ind+self.max_len]
 				try:
@@ -77,15 +77,18 @@ class PatternLength:
 				
 				if end_ind < len(p_temp):
 					p = tuple(self.__sequence[init_ind : init_ind+end_ind])
+					new_pattern = True
 					for p_head in pattern_sets:
 						if self.__pattern_distance(p, p_head) == 0.0:
+							new_pattern = False
 							p_set = pattern_sets[p_head]
 							if p not in p_set:
 								p_set.update({p:1})
 							else:
 								p_set[p] +=1
 							break
-					pattern_sets.update({p : {p :1}})
+					if new_pattern:
+						pattern_sets.update({p : {p :1}})
 
 		### Finding most frequent pattern
 		for p_set in pattern_sets.values():
@@ -190,12 +193,21 @@ class PatternLength:
 				cluster_seqs.update({label : list(cluster_subseqs[e])})
 			else:
 				cluster_seqs[label].extend(cluster_subseqs[e])
+		
 		for label in cluster_seqs:
 			possible_patterns = cluster_seqs[label]
 			for seq in possible_patterns:
 				for subseq in possible_patterns:
 					if seq != subseq and self.__seq_contains(seq[0],subseq[0]):
 						del possible_patterns[possible_patterns.index(subseq)]
+
+		### Printing values
+		print ('Final Number of Clusters: ', len(cluster_seqs))
+		print ('Idle Class: ', idle_label)
+		print ('Working Class: ', self.working_label)
+		for k in cluster_seqs:
+			print (k)
+			print (cluster_seqs[k])
 		return cluster_seqs
 
 	@ timing_wrapper
@@ -228,17 +240,17 @@ class PatternLength:
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
 		### Filtering
-		b, a = butter(3, 0.5)
-		power_f = filtfilt(b, a, self.power)
-		min_power = np.min(power_f)
-		if min_power < 0:
-			power_f = power_f + abs(min_power)
+		# b, a = butter(3, 0.5)
+		# power_f = filtfilt(b, a, self.power)
+		# min_power = np.min(power_f)
+		# if min_power < 0:
+		# 	power_f = power_f + abs(min_power)
 		
-		# plt.plot(self.power, color='g')
-		# plt.plot(power_f)
-		# plt.show()
+		# # plt.plot(self.power, color='g')
+		# # plt.plot(power_f)
+		# # plt.show()
 		
-		# power_f = self.power ## No filtering
+		power_f = self.power ## No filtering
 		
 		### Detecting Peaks
 		peak_indices_list = []
@@ -295,37 +307,57 @@ class PatternLength:
 
 	@timing_wrapper
 	def __find_matches(self):
-		print ('Finding matches for patterns...')
+		print ('Matching Discovered Patterns...')
 		start_ind = 0
 		pattern_sequence = []
 		pattern_sequence_indices = []
 		while start_ind < len(self.__sequence)-self.min_len:
-			dist_end_pattern = []
-			end_limit = self.__get_end_limits(start_ind)
+			min_pdist = []
+			end_ind_l = []
+			req_labels = []
+			max_limit = self.__get_end_limits(start_ind)
+			# print (start_ind, max_limit)
 			for label, p_set in self.__pattern_dict.items():
-				pattern, freq = max(p_set, key=lambda x:x[1])
-				end_t = start_ind + self.min_len
-				dist_t_pattern = []
-				if end_t > end_limit:
-					end_t = end_limit
-				while end_t <= end_limit:
-					p_temp = self.__sequence[start_ind:end_t]
-					dist_t_pattern.append(self.__pattern_distance(p_temp, pattern))
-					end_t +=1
-				min_dist_t = min(dist_t_pattern)
-				end_ind_p  = len(dist_t_pattern)-1 - dist_t_pattern[::-1].index(min_dist_t) ## Longest length within same pattern
-				dist_end_pattern.append((min_dist_t, end_ind_p))
+				pattern, freq = max(p_set, key=lambda x:x[1])	
+				dists = []
+				ends = []
+				end_ind_t = start_ind+self.min_len
+				if end_ind_t > max_limit:
+					end_ind_t = max_limit
+				while end_ind_t <= max_limit:
+					p_temp = self.__sequence[start_ind:end_ind_t]
+					dist = self.__pattern_distance(p_temp,pattern)
+					dists.append(dist)
+					ends.append(end_ind_t)
+					end_ind_t +=1
 				
-			dist_end_pattern.sort(key=lambda x:x[1])
-			min_dist, end = min(dist_end_pattern, key=lambda x:x[0]) 
-			end_ind = start_ind + self.min_len + end
+				### preferring longer patterns rather than shorter ones intra pattern
+				min_dist = min(dists)
+				for e,d in enumerate(dists):
+					if d == min_dist:
+						end_ind_f = ends[e]
+				
+				min_pdist.append(min_dist)
+				end_ind_l.append(end_ind_f)
+				req_labels.append(label)
+			
+			req_pdist = min(min_pdist)
+			end_ind = np.inf 
+			for e, d in enumerate(min_pdist):   
+				if end_ind_l[e] < end_ind and d == req_pdist:   ## shorter inter patterns
+					end_ind = end_ind_l[e]
+					final_label = req_labels[e]
+ 
 			p_mean = np.mean([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			p_var = np.std([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			req_label = self.__pattern_predictor.predict(np.array([[p_mean, p_var]]))
+			print (self.__sequence[start_ind:end_ind])
+			print (final_label, req_label)
 			pattern_sequence.append(req_label[0])
 			if end_ind <= len(self.__sequence):
 				pattern_sequence_indices.append(end_ind-1)
 			start_ind = end_ind-1
+		
 		return pattern_sequence, pattern_sequence_indices
 
 	def __seq_contains(self, seq, subseq):
