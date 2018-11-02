@@ -7,7 +7,6 @@ from dtw import dtw
 import numpy as np
 import jenkspy
 import time
-import os
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
@@ -29,12 +28,12 @@ class PatternMining:
 			raise ValueError('Incorrect values for length of pattern')
 		self.state_attributes = state_attributes
 		self.min_states, self.max_states = self.__partition_states()
-		self.__pattern_sets = dict()
+		self.pattern_sets = dict()
 		self.patterns_unique = []
 
 	def __partition_states(self):
-		seq_means = np.array([s[0] for s in self.state_attributes.values()]).reshape(-1,1)
-		print (seq_means)
+		seq_means = np.array([self.state_attributes[str(s)][0] for s in self.sequence]).reshape(-1,1)
+		# print (seq_means)
 		kmeans = KMeans(2).fit(seq_means)
 		cl_centers = [cl[0] for cl in kmeans.cluster_centers_] 
 		if cl_centers[0] > cl_centers[1]:
@@ -66,7 +65,7 @@ class PatternMining:
 	def find_patterns(self):
 		### Looking for patterns that start and stop with all possible min states.
 		print ('Mining Required Patterns...')
-		for init_ind in range(len(self.sequence)-2):
+		for init_ind in range(len(self.sequence)-self.MIN_LEN):
 			# print (init_ind)
 			if self.sequence[init_ind] in self.min_states:
 				p_temp = self.sequence[init_ind:init_ind+self.MAX_LEN]
@@ -76,7 +75,7 @@ class PatternMining:
 					p = tuple(self.sequence[init_ind : init_ind+end_ind])
 					p_set = self.__patternset_list_contains(p)
 					if p_set == None:
-						self.__pattern_sets.update({p : {p :1}})
+						self.pattern_sets.update({p : {p :1}})
 					else:
 						if p not in p_set:
 							p_set.update({p:1})
@@ -84,24 +83,24 @@ class PatternMining:
 							p_set[p] +=1
 
 		### Finding most frequent pattern
-		for p_set in self.__pattern_sets.values():
+		for p_set in self.pattern_sets.values():
 			total_freq = sum(p_set.values())
 			max_item = max([z for z in p_set.items()], key= lambda x:x[1])
 			if total_freq > 1:
 				self.patterns_unique.append((list(max_item[0]),total_freq))
 
 		print ('Total Unique Patterns: ', len(self.patterns_unique))
-		print (self.patterns_unique)
+		# print (self.patterns_unique)
 		
-		if len(self.__pattern_sets) == 0:
+		if len(self.pattern_sets) == 0:
 			raise ValueError('No Patterns Found')
 		
 		return self.patterns_unique
 
 	def __patternset_list_contains(self, pattern):
-		for p_head in self.__pattern_sets:
+		for p_head in self.pattern_sets:
 			if self.__pattern_distance(pattern, p_head) == 0.0:
-				return self.__pattern_sets[p_head]
+				return self.pattern_sets[p_head]
 		return None
 
 	def __pattern_distance(self, head, pattern):
