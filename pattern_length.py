@@ -430,7 +430,6 @@ class PatternLength:
 		return cycle_time
 
 
-##### TRANSFER THE CURRENT SIGNAL SEGMENTATION EXACTLY HOW IT IS.
 ## if off region present, consider the signal to the max limit only
 ## break of only when a low partition state comes.
 ### correct partitioning
