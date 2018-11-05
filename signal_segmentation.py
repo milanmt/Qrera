@@ -189,6 +189,13 @@ class SignalSegmentation:
 				if s not in idle_states:
 					idle_states.append(s)
 		
+		# min_ws = np.inf
+		# for pt,freq in self.pattern_dict[self.working_label]:
+		# 	for s in pt:
+		# 		if s < min_ws:
+		# 			min_ws = s
+		# print (min_ws, 'min working')
+
 		while start_ind < len(self.sequence)-self.uni_min:
 			min_pdist = []
 			max_limit = self.__get_end_limits(start_ind)
