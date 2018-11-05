@@ -239,7 +239,12 @@ class PatternLength:
 			else: 
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
-		power_f = self.power ## No filtering
+		## Filtering
+		b, a = butter(3,0.5)
+		power_f = filtfilt(b, a, self.power)
+		min_power = np.min(power_f)
+		if min_power < 0:
+			power_f = power_f + abs(min_power)
 		
 		### Detecting Peaks
 		peak_indices_list = []
