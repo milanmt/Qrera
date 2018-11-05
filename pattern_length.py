@@ -239,17 +239,6 @@ class PatternLength:
 			else: 
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
-		### Filtering
-		# b, a = butter(3, 0.5)
-		# power_f = filtfilt(b, a, self.power)
-		# min_power = np.min(power_f)
-		# if min_power < 0:
-		# 	power_f = power_f + abs(min_power)
-		
-		# # plt.plot(self.power, color='g')
-		# # plt.plot(power_f)
-		# # plt.show()
-		
 		power_f = self.power ## No filtering
 		
 		### Detecting Peaks
@@ -296,11 +285,11 @@ class PatternLength:
 	def __get_end_limits(self, start_ind):
 		max_limit = start_ind+self.max_len
 		if self.__off_regions:
-			for i in range(start_ind+1,max_limit-1):
+			for i in range(start_ind+1,max_limit+1):
 				if i+1 >= len(self.__peak_indices):
 					return len(self.__peak_indices)
-				if any(point in self.__off_regions for point in range(self.__peak_indices[i],self.__peak_indices[i+1]+1)):
-					return i+1
+				if any(point in range(self.__peak_indices[i],self.__peak_indices[i+1]+1) for point in self.__off_regions):
+					return i+2
 			return max_limit
 		else:
 			return max_limit
@@ -388,7 +377,6 @@ class PatternLength:
 		p_array, p_indices = self.__find_matches()
 		unique_labels, counts = np.unique(p_array, return_counts=True)
 
-
 		print ('Mapping time indices...')
 		simplified_seq = np.zeros((len(self.power)))
 		start_ind = 0
@@ -397,14 +385,15 @@ class PatternLength:
 			start_ind = self.__peak_indices[i]+2
 		simplified_seq[self.__off_regions] = 2
 
-
 		p_l = 0
 		for e,p in enumerate(p_array):
 			if p == self.working_label:
 				if e == 0:
-					p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[0]]
+					if all(point not in range(self.__peak_indices[p_indices[0]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
+						p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[0]]
 				else:
-					p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[e-1]]
+					if all(point not in range(self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
+						p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[e-1]]
 		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
 		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
 
@@ -429,8 +418,5 @@ class PatternLength:
 		plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
 		return cycle_time
 
-
 ## if off region present, consider the signal to the max limit only
 ## break of only when a low partition state comes.
-### correct partitioning
-## additional time due to loading?

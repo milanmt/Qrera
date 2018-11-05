@@ -167,12 +167,12 @@ class SignalSegmentation:
 		if self.off_regions:
 			for i in range(start_ind, max_limit+1):
 				if i+1 >= len(self.peak_indices):
-					return len(self.peak_indices), False
+					return len(self.peak_indices)
 				if any(point in range(self.peak_indices[i],self.peak_indices[i+1]+1) for point in self.off_regions):
-					return i+1, True
-			return max_limit, False
+					return i+2     ## to include the point after off region, to allow smooth transition to next pattern
+			return max_limit
 		else:
-			return max_limit, False
+			return max_limit
 
 
 	@timing_wrapper
@@ -183,7 +183,7 @@ class SignalSegmentation:
 		pattern_sequence_indices = []
 		while start_ind < len(self.sequence)-self.min_len:
 			min_pdist = []
-			max_limit, off_region_present = self.__get_end_limits(start_ind)
+			max_limit = self.__get_end_limits(start_ind)
 			end_ind_l = []
 			req_labels = []
 			# print (start_ind, max_limit)
@@ -227,39 +227,24 @@ class SignalSegmentation:
 			if end_ind <= len(self.sequence):
 				pattern_sequence_indices.append(end_ind-1)
 
-			if off_region_present: ### Incase of off region, start after the off region
-				start_ind = end_ind
-			else:
-				start_ind = end_ind-1
+			start_ind = end_ind-1
 		
 		self.pattern_sequence = pattern_sequence
 		self.pattern_sequence_indices = pattern_sequence_indices
 		return pattern_sequence, pattern_sequence_indices
 
+	@timing_wrapper
 	def get_average_working_pattern_length(self):
 		unique_labels, counts = np.unique(self.pattern_sequence, return_counts=True)
 		p_l = 0
 		for e,p in enumerate(self.pattern_sequence):
 			if p == self.working_label:
 				if e == 0:
-					if not any(point in range(self.peak_indices[self.pattern_sequence_indices[e]],self.peak_indices[self.pattern_sequence_indices[0]]+1) for point in self.off_regions):
+					if all(point not in range(self.peak_indices[self.pattern_sequence_indices[0]],self.peak_indices[self.pattern_sequence_indices[e]]+1) for point in self.off_regions):
 						p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[0]]
 				else:
-					if not any(point in range(self.peak_indices[self.pattern_sequence_indices[e]],self.peak_indices[self.pattern_sequence_indices[e-1]]+1) for point in self.off_regions):
+					if all(point not in range(self.peak_indices[self.pattern_sequence_indices[e-1]],self.peak_indices[self.pattern_sequence_indices[e]]+1) for point in self.off_regions):
 						p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[e-1]]
-		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
-		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
-		return cycle_time
-
-	def get_average_working_pattern_length_old(self):
-		unique_labels, counts = np.unique(self.pattern_sequence, return_counts=True)
-		p_l = 0
-		for e,p in enumerate(self.pattern_sequence):
-			if p == self.working_label:
-				if e == 0:
-					p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[0]]
-				else:
-					p_l += self.peak_indices[self.pattern_sequence_indices[e]] - self.peak_indices[self.pattern_sequence_indices[e-1]]
 		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
 		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
 		return cycle_time
