@@ -394,10 +394,10 @@ class PatternLength:
 		for e,p in enumerate(p_array):
 			if p == self.working_label:
 				if e == 0:
-					if all(point not in range(self.__peak_indices[p_indices[0]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
+					if all(point not in range(self.__peak_indices[p_indices[0]],self.__peak_indices[p_indices[e]]+1) for point in self.__off_regions):
 						p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[0]]
 				else:
-					if all(point not in range(self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
+					if all(point not in range(self.__peak_indices[p_indices[e-1]],self.__peak_indices[p_indices[e]]+1) for point in self.__off_regions):
 						p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[e-1]]
 		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
 		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
@@ -423,5 +423,4 @@ class PatternLength:
 		plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
 		return cycle_time
 
-## if off region present, consider the signal to the max limit only
 ## break of only when a low partition state comes.
