@@ -40,8 +40,8 @@ class SignalSegmentation:
 		self.uni_min = 3
 
 	def __get_patterns(self):
-		pm = cpm.PatternMining(self.sequence, self.state_attributes, self.min_len, self.max_len)
-		self.patterns = pm.find_patterns()
+		self.pm = cpm.PatternMining(self.sequence, self.state_attributes, self.min_len, self.max_len)
+		self.patterns = self.pm.find_patterns()
 		if len(self.patterns) == 1:
 			raise ValueError('Required number of patterns not found')
 
@@ -189,12 +189,12 @@ class SignalSegmentation:
 				if s not in idle_states:
 					idle_states.append(s)
 		
-		# min_ws = np.inf
-		# for pt,freq in self.pattern_dict[self.working_label]:
-		# 	for s in pt:
-		# 		if s < min_ws:
-		# 			min_ws = s
-		# print (min_ws, 'min working')
+		min_ws = np.inf
+		for pt,freq in self.pattern_dict[self.working_label]:
+			for s in pt:
+				if s < min_ws and s not in self.pm.max_states and s not in idle_states:
+					min_ws = s
+		print (min_ws, 'min working')
 
 		while start_ind < len(self.sequence)-self.uni_min:
 			min_pdist = []
@@ -204,6 +204,7 @@ class SignalSegmentation:
 			# print (start_ind, max_limit)
 			end_ind_t = None 
 			p_temp = self.sequence[start_ind:max_limit]
+			print (p_temp)
 			for e,s in enumerate(p_temp[self.uni_min-1:]):
 				if s in idle_states:
 					end_ind_t = start_ind+self.uni_min+e
@@ -220,11 +221,31 @@ class SignalSegmentation:
 						end_ind_t = max_limit
 				
 					while end_ind_t <= max_limit:
-						p_temp = self.sequence[start_ind:end_ind_t]
-						dist = self.__pattern_distance(p_temp,pattern)
-						dists.append(dist)
-						ends.append(end_ind_t)
+						if np.inf == min_ws:
+							p_temp = self.sequence[start_ind:end_ind_t]
+							dist = self.__pattern_distance(p_temp,pattern)
+							dists.append(dist)
+							ends.append(end_ind_t)
+						else:
+							p_temp = self.sequence[start_ind:end_ind_t]
+							print (p_temp)
+							if self.sequence[end_ind_t-1] == min_ws:
+								p_temp = self.sequence[start_ind:end_ind_t]
+								dist = self.__pattern_distance(p_temp,pattern)
+								dists.append(dist)
+								ends.append(end_ind_t)
 						end_ind_t +=1
+
+					if not dists:
+						end_ind_t = start_ind+self.min_len
+						if end_ind_t > max_limit:
+							end_ind_t = max_limit
+						while end_ind_t <= max_limit:
+							p_temp = self.sequence[start_ind:end_ind_t]
+							dist = self.__pattern_distance(p_temp,pattern)
+							dists.append(dist)
+							ends.append(end_ind_t)
+							end_ind_t +=1
 							
 					### preferring longer patterns rather than shorter ones intra pattern
 					min_dist = min(dists)
