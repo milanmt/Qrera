@@ -204,11 +204,12 @@ class SignalSegmentation:
 			# print (start_ind, max_limit)
 			end_ind_t = None 
 			p_temp = self.sequence[start_ind:max_limit]
-			print (p_temp)
+		
+			min_s = np.inf 
 			for e,s in enumerate(p_temp[self.uni_min-1:]):
-				if s in idle_states:
-					end_ind_t = start_ind+self.uni_min+e
-					break
+				if s in idle_states and s < min_s:
+					min_s = s
+					end_ind_t = start_ind+self.uni_min+e				
 		
 			for label, p_set in self.pattern_dict.items():
 				pattern, freq	= max(p_set, key=lambda x:x[1])	
@@ -228,7 +229,7 @@ class SignalSegmentation:
 							ends.append(end_ind_t)
 						else:
 							p_temp = self.sequence[start_ind:end_ind_t]
-							print (p_temp)
+							# print (p_temp)
 							if self.sequence[end_ind_t-1] == min_ws:
 								p_temp = self.sequence[start_ind:end_ind_t]
 								dist = self.__pattern_distance(p_temp,pattern)
@@ -271,7 +272,8 @@ class SignalSegmentation:
 			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
-			# print (self.sequence[start_ind:end_ind])
+			if np.std(self.sequence[start_ind:end_ind]) !=0 :
+				print (self.sequence[start_ind:end_ind])
 			# print (final_label, req_label)
 			pattern_sequence.append(req_label[0])
 			if end_ind <= len(self.sequence):
