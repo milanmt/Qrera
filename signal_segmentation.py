@@ -38,6 +38,7 @@ class SignalSegmentation:
 		self.predictor = None
 		self.off_regions = None
 		self.uni_min = 3
+		self.no_max_freq = 3
 
 	def __get_patterns(self):
 		self.pm = cpm.PatternMining(self.sequence, self.state_attributes, self.min_len, self.max_len)
@@ -210,40 +211,40 @@ class SignalSegmentation:
 			contains_min = any(s in self.sequence[start_ind:max_limit] for s in idle_states)
 		
 			for label, p_set in self.pattern_dict.items():
-				pattern, freq	= max(p_set, key=lambda x:x[1])	
-				dists = []
-				ends = []
-				end_ind_t = start_ind+self.uni_min
-				if end_ind_t > max_limit:
-					end_ind_t = max_limit
+				sorted_patterns	= sorted(p_set, key=lambda x:x[1], reverse=True)
+				for pattern,freq in sorted_patterns[:3]:	
+					dists = []
+					ends = []
+					end_ind_t = start_ind+self.uni_min
+					if end_ind_t > max_limit:
+						end_ind_t = max_limit
 				
-				while end_ind_t <= max_limit:
-					if contains_min:
-						if self.sequence[end_ind_t-1] in idle_states:
+					while end_ind_t <= max_limit:
+						if contains_min:
+							if self.sequence[end_ind_t-1] in idle_states:
+								p_temp = self.sequence[start_ind:end_ind_t]
+								dist = self.__pattern_distance(p_temp,pattern)
+								# print (p_temp, pattern, dist)
+								dists.append(dist)
+								ends.append(end_ind_t)
+						else:
 							p_temp = self.sequence[start_ind:end_ind_t]
 							dist = self.__pattern_distance(p_temp,pattern)
-							# print (p_temp, pattern, dist)
 							dists.append(dist)
 							ends.append(end_ind_t)
-					else:
-						p_temp = self.sequence[start_ind:end_ind_t]
-						dist = self.__pattern_distance(p_temp,pattern)
-						dists.append(dist)
-						ends.append(end_ind_t)
-						
-					end_ind_t +=1
+						end_ind_t +=1
 							
-				### preferring shorter patterns rather than longer ones intra pattern
-				min_dist = min(dists)
-				# print (min_dist)
-				for e,d in enumerate(dists):
-					if d == min_dist:
-						end_ind_f = ends[e]
-						break
+					### preferring shorter patterns rather than longer ones intra pattern
+					min_dist = min(dists)
+					# print (min_dist)
+					for e,d in enumerate(dists):
+						if d == min_dist:
+							end_ind_f = ends[e]
+							break
 				
-				min_pdist.append(min_dist)
-				end_ind_l.append(end_ind_f)
-				req_labels.append(label)
+					min_pdist.append(min_dist)
+					end_ind_l.append(end_ind_f)
+					req_labels.append(label)
 			
 			req_pdist = min(min_pdist)
 			end_ind = np.inf 
