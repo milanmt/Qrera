@@ -166,6 +166,8 @@ class SignalSegmentation:
 
 	def __get_end_limits(self, start_ind):
 		max_limit = start_ind+self.max_len
+		if max_limit > len(self.sequence):
+			max_limit = len(self.sequence)
 		if self.off_regions:
 			for i in range(start_ind, max_limit+1):
 				if i+1 >= len(self.peak_indices):
@@ -196,85 +198,66 @@ class SignalSegmentation:
 					min_ws = s
 		print (min_ws, 'min working')
 
+		if min_ws != np.inf:
+			idle_states.append(min_ws)
+
 		while start_ind < len(self.sequence)-self.uni_min:
 			min_pdist = []
 			max_limit = self.__get_end_limits(start_ind)
 			end_ind_l = []
 			req_labels = []
 			# print (start_ind, max_limit)
-			end_ind_t = None 
-			p_temp = self.sequence[start_ind:max_limit]
-		
-			min_s = np.inf 
-			for e,s in enumerate(p_temp[self.uni_min-1:]):
-				if s in idle_states and s < min_s:
-					min_s = s
-					end_ind_t = start_ind+self.uni_min+e				
+			contains_min = any(s in self.sequence[start_ind:max_limit] for s in idle_states)
 		
 			for label, p_set in self.pattern_dict.items():
 				pattern, freq	= max(p_set, key=lambda x:x[1])	
-
-				if end_ind_t == None:
-					dists = []
-					ends = []
-					end_ind_t = start_ind+self.min_len
-					if end_ind_t > max_limit:
-						end_ind_t = max_limit
+				dists = []
+				ends = []
+				end_ind_t = start_ind+self.uni_min
+				if end_ind_t > max_limit:
+					end_ind_t = max_limit
 				
-					while end_ind_t <= max_limit:
-						if np.inf == min_ws:
+				while end_ind_t <= max_limit:
+					if contains_min:
+						if self.sequence[end_ind_t-1] in idle_states:
 							p_temp = self.sequence[start_ind:end_ind_t]
 							dist = self.__pattern_distance(p_temp,pattern)
+							# print (p_temp, pattern, dist)
 							dists.append(dist)
 							ends.append(end_ind_t)
-						else:
-							p_temp = self.sequence[start_ind:end_ind_t]
-							# print (p_temp)
-							if self.sequence[end_ind_t-1] == min_ws:
-								p_temp = self.sequence[start_ind:end_ind_t]
-								dist = self.__pattern_distance(p_temp,pattern)
-								dists.append(dist)
-								ends.append(end_ind_t)
-						end_ind_t +=1
-
-					if not dists:
-						end_ind_t = start_ind+self.min_len
-						if end_ind_t > max_limit:
-							end_ind_t = max_limit
-						while end_ind_t <= max_limit:
-							p_temp = self.sequence[start_ind:end_ind_t]
-							dist = self.__pattern_distance(p_temp,pattern)
-							dists.append(dist)
-							ends.append(end_ind_t)
-							end_ind_t +=1
+					else:
+						p_temp = self.sequence[start_ind:end_ind_t]
+						dist = self.__pattern_distance(p_temp,pattern)
+						dists.append(dist)
+						ends.append(end_ind_t)
+						
+					end_ind_t +=1
 							
-					### preferring longer patterns rather than shorter ones intra pattern
-					min_dist = min(dists)
-					for e,d in enumerate(dists):
-						if d == min_dist:
-							end_ind_f = ends[e]
-
-				else:
-					min_dist = self.__pattern_distance(self.sequence[start_ind:end_ind_t],pattern)
-					end_ind_f = end_ind_t
+				### preferring shorter patterns rather than longer ones intra pattern
+				min_dist = min(dists)
+				# print (min_dist)
+				for e,d in enumerate(dists):
+					if d == min_dist:
+						end_ind_f = ends[e]
+						break
 				
 				min_pdist.append(min_dist)
 				end_ind_l.append(end_ind_f)
 				req_labels.append(label)
 			
-				req_pdist = min(min_pdist)
-				end_ind = np.inf 
-				for e, d in enumerate(min_pdist):   
-					if end_ind_l[e] < end_ind and d == req_pdist:   ## shorter inter patterns
-						end_ind = end_ind_l[e]
-						final_label = req_labels[e]
+			req_pdist = min(min_pdist)
+			end_ind = np.inf 
+			for e, d in enumerate(min_pdist):   
+				if end_ind_l[e] < end_ind and d == req_pdist:   ## shorter inter patterns
+					end_ind = end_ind_l[e]
+					final_label = req_labels[e]
  
 			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
 			if np.std(self.sequence[start_ind:end_ind]) !=0 :
 				print (self.sequence[start_ind:end_ind])
-			# print (final_label, req_label)
+				print (final_label, req_label)
 			pattern_sequence.append(req_label[0])
 			if end_ind <= len(self.sequence):
 				pattern_sequence_indices.append(end_ind-1)
