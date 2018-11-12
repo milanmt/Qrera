@@ -199,17 +199,23 @@ class SignalSegmentation:
 					min_ws = s
 		print (min_ws, 'min working')
 
-		if min_ws != np.inf:
-			idle_states.append(min_ws)
-
 		while start_ind < len(self.sequence)-self.uni_min:
 			min_pdist = []
 			max_limit = self.__get_end_limits(start_ind)
 			end_ind_l = []
 			req_labels = []
 			# print (start_ind, max_limit)
-			contains_min = any(s in self.sequence[start_ind:max_limit] for s in idle_states)
-		
+			# print (self.sequence[start_ind:max_limit])
+			contains_idle = any(s in self.sequence[start_ind+self.uni_min-1:max_limit] for s in idle_states)
+
+			if min_ws != np.inf:
+				if min_ws in self.sequence[start_ind+self.uni_min-1:max_limit]:
+					contains_min = True
+				else:
+					contains_min = False
+			else:
+				contains_min = False
+						
 			for label, p_set in self.pattern_dict.items():
 				sorted_patterns	= sorted(p_set, key=lambda x:x[1], reverse=True)
 				for pattern,freq in sorted_patterns[:3]:	
@@ -218,18 +224,30 @@ class SignalSegmentation:
 					end_ind_t = start_ind+self.uni_min
 					if end_ind_t > max_limit:
 						end_ind_t = max_limit
-				
+					starting_end_ind_t = end_ind_t
+			
 					while end_ind_t <= max_limit:
-						if contains_min:
+						if contains_idle:
 							if self.sequence[end_ind_t-1] in idle_states:
+								p_temp = self.sequence[start_ind:end_ind_t]
+								if self.__pattern_distance(p_temp, self.sequence[start_ind:end_ind_t-1]) != 0 or starting_end_ind_t == end_ind_t:
+									dist = self.__pattern_distance(p_temp,pattern)
+									# print (p_temp, pattern, dist)
+									dists.append(dist)
+									ends.append(end_ind_t)
+
+						elif contains_min:
+							if self.sequence[end_ind_t-1] == min_ws:
 								p_temp = self.sequence[start_ind:end_ind_t]
 								dist = self.__pattern_distance(p_temp,pattern)
 								# print (p_temp, pattern, dist)
 								dists.append(dist)
 								ends.append(end_ind_t)
+
 						else:
 							p_temp = self.sequence[start_ind:end_ind_t]
 							dist = self.__pattern_distance(p_temp,pattern)
+							# print (p_temp, pattern, dist)
 							dists.append(dist)
 							ends.append(end_ind_t)
 						end_ind_t +=1
@@ -252,12 +270,31 @@ class SignalSegmentation:
 				if end_ind_l[e] < end_ind and d == req_pdist:   ## shorter inter patterns
 					end_ind = end_ind_l[e]
 					final_label = req_labels[e]
- 
+
+			if any(s in idle_states for s in self.sequence[start_ind+self.uni_min:end_ind-1]) and final_label == self.working_label:
+				dist_n = np.inf
+				for e, s in enumerate(self.sequence[start_ind+self.uni_min:end_ind-1]):
+					if s in idle_states:
+						idle_ind = start_ind+self.uni_min+e
+						
+						for label, p_set in self.pattern_dict.items():
+							sorted_patterns	= sorted(p_set, key=lambda x:x[1], reverse=True)
+							for pattern,freq in sorted_patterns[:3]:
+								temp_dist = self.__pattern_distance(pattern, self.sequence[idle_ind:end_ind])
+								print (self.sequence[idle_ind:end_ind],pattern, temp_dist)
+													
+								if dist_n > temp_dist:
+									dist_n = temp_dist
+									new_end_ind = idle_ind
+
+				if dist_n <= req_pdist:
+					end_ind = new_end_ind+1
+			
 			p_mean = np.mean([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
 			if np.std(self.sequence[start_ind:end_ind]) !=0 :
-				print (self.sequence[start_ind:end_ind])
+				print (self.sequence[start_ind:end_ind],'###################################')
 				print (final_label, req_label)
 			pattern_sequence.append(req_label[0])
 			if end_ind <= len(self.sequence):
@@ -272,6 +309,8 @@ class SignalSegmentation:
 	@timing_wrapper
 	def get_average_working_pattern_length(self):
 		unique_labels, counts = np.unique(self.pattern_sequence, return_counts=True)
+		working_ind = list(unique_labels).index(self.working_label)
+		print ('No. of working patterns found : ' , counts[working_ind])
 		p_l = 0
 		for e,p in enumerate(self.pattern_sequence):
 			if p == self.working_label:
@@ -352,3 +391,4 @@ def seq_contains(seq, subseq):
 				if dist == 0:
 					return True
 	return False
+
