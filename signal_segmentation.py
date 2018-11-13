@@ -239,7 +239,7 @@ class SignalSegmentation:
 							if contains_idle:
 								if self.sequence[end_ind_t-1] in idle_states:
 									p_temp = self.sequence[start_ind:end_ind_t]
-									if self.sequence[end_ind_t-1] == self.sequence[end_ind_t-2] or starting_end_ind_t == end_ind_t:
+									if self.sequence[end_ind_t-1] != self.sequence[end_ind_t-2] or starting_end_ind_t == end_ind_t:
 										dist = self.__pattern_distance(p_temp,pattern)
 										print (p_temp, pattern, dist)
 										dists.append(dist)
@@ -248,7 +248,7 @@ class SignalSegmentation:
 							elif contains_min:
 								if self.sequence[end_ind_t-1] == min_ws:
 									p_temp = self.sequence[start_ind:end_ind_t]
-									if self.sequence[end_ind_t-1] == self.sequence[end_ind_t-2] or starting_end_ind_t == end_ind_t:
+									if self.sequence[end_ind_t-1] != self.sequence[end_ind_t-2] or starting_end_ind_t == end_ind_t:
 										dist = self.__pattern_distance(p_temp,pattern)
 										# print (p_temp, pattern, dist)
 										dists.append(dist)
