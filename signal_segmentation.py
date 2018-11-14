@@ -6,16 +6,14 @@ import peak_detector as pd
 import matplotlib.pyplot as plt
 from dtw import dtw
 import numpy as np
-import time
+import datetime
 
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
-		
-		t0= time.time()
+		t = datetime.datetime.now()
 		func_val = func(*args,**kwargs)
-		time_taken = time.time() - t0
-
+		time_taken = datetime.datetime.now() -t
 		print (str(func),' took: ', time_taken)
 		return func_val
 	return wrapper
@@ -226,7 +224,7 @@ class SignalSegmentation:
 						
 			for label, p_set in self.pattern_dict.items():
 				sorted_patterns	= sorted(p_set, key=lambda x:x[1], reverse=True)
-				for pattern,freq in sorted_patterns[:3]:	
+				for pattern,freq in sorted_patterns[:self.no_max_freq]:	
 					dists = []
 					ends = []
 					end_ind_t = start_ind+self.uni_min
@@ -313,9 +311,9 @@ class SignalSegmentation:
 			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
 			# if np.std(self.sequence[start_ind:end_ind]) !=0 :
-			print (self.sequence[start_ind:end_ind])
-			print (final_label, req_label)
-			print ('#################################')
+			# print (self.sequence[start_ind:end_ind])
+			# print (final_label, req_label)
+			# print ('#################################')
 			
 			if end_ind <= len(self.sequence):
 				pattern_sequence_indices.append(end_ind-1)
@@ -348,12 +346,13 @@ class SignalSegmentation:
 
 	@timing_wrapper
 	def segment_signal(self, power_signal):
+		self.power = power_signal
 		self.off_regions = [e for e,p in enumerate(power_signal) if p == 0]
 		power_f = pd.filter_signal(power_signal)
 		final_peaks, self.peak_indices = pd.detect_peaks(power_f,self.order) ## Order of the derivative
 		no_iter = 1
 		while self.pattern_dict == None:
-			self.sequence, self.state_attributes = pd.signal_to_discrete_states(final_peaks)
+			self.sequence, self.state_attributes, self.state_predictor= pd.signal_to_discrete_states(final_peaks)
 			self.__discover_segmentation_pattern()
 			no_iter += 1
 			if no_iter >= 5:
@@ -390,6 +389,49 @@ class SignalSegmentation:
 			else:
 				segmented_regions.update({'off_regions': start_stop})
 		return self.simplified_seq, segmented_regions
+
+
+	def get_accurate_average_working_length(self):
+		unique_labels, counts = np.unique(self.pattern_sequence, return_counts=True)
+		working_ind = list(unique_labels).index(self.working_label)
+		print ('No. of working patterns found : ' , counts[working_ind])
+		p_l = 0
+		for e,p in enumerate(self.pattern_sequence):
+			if p == self.working_label:
+				if e == 0:
+					if all(point not in range(self.peak_indices[self.pattern_sequence_indices[0]],self.peak_indices[self.pattern_sequence_indices[e]]+1) for point in self.off_regions):
+						p_current = np.array(self.power[:self.peak_indices[self.pattern_sequence_indices[e]]+2])
+						print (np.mean(p_current))
+						p_current = p_current.reshape(-1,1)
+						pc_labels = self.state_predictor.predict(p_current)
+
+						color=['navy', 'cornflowerblue', 'gold', 'c', 'darkorange', 'r', 'g', 'm', 'y', 'k', 'teal', 'chocolate', 'crimson', 'dimgray', 'purple']
+						color_labels = []
+						for label in pc_labels:
+							color_labels.append(color[int(label)])
+						# print ([ color[s] for s in states])
+						plt.scatter(range(len(pc_labels)), p_current, color= color_labels)
+						plt.show()
+
+				else:
+					if all(point not in range(self.peak_indices[self.pattern_sequence_indices[e-1]],self.peak_indices[self.pattern_sequence_indices[e]]+1) for point in self.off_regions):
+						p_current = np.array(self.power[self.peak_indices[self.pattern_sequence_indices[e-1]+1]:self.peak_indices[self.pattern_sequence_indices[e]]+2])
+						print (np.mean(p_current))
+						p_current = p_current.reshape(-1,1)
+						pc_labels = self.state_predictor.predict(p_current)
+
+						color=['navy', 'cornflowerblue', 'gold', 'c', 'darkorange', 'r', 'g', 'm', 'y', 'k', 'teal', 'chocolate', 'crimson', 'dimgray', 'purple']
+						color_labels = []
+						for label in pc_labels:
+							color_labels.append(color[int(label)])
+						# print ([ color[s] for s in states])
+						plt.scatter(range(len(pc_labels)), p_current, color= color_labels)
+						plt.show()
+		
+		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
+		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
+		return cycle_time
+
 
 	
 def seq_contains(seq, subseq):
