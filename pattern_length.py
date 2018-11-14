@@ -1,11 +1,12 @@
 #! /usr/bin/env python3
 
 from sklearn.cluster import AffinityPropagation, KMeans
-from scipy.signal import find_peaks, butter, filtfilt
 from sklearn.mixture import BayesianGaussianMixture
+from scipy.signal import find_peaks, savgol_filter
 from dtw import dtw
 import pandas as pd
 import numpy as np
+import datetime
 import time
 import matplotlib.pyplot as plt
 import plotly.graph_objs as go
@@ -13,12 +14,13 @@ import plotly
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
-		t0= time.time()
+		t = datetime.datetime.now()
 		func_val = func(*args,**kwargs)
-		time_taken = time.time() - t0
+		time_taken = datetime.datetime.now() -t
 		print (str(func),' took: ', time_taken)
 		return func_val
 	return wrapper
+
 
 class SinglePatternError(Exception):
 	pass
@@ -32,6 +34,8 @@ class PatternLength:
 			raise ValueError('Incorrect values for length of pattern')
 		self.order = order
 		self.n_states = n_states
+		self.uni_min = 3   ## Pattern has to be atleast this long to be considered a pattern
+		self.no_max_freq = 3 ## No.of patterns from each region to consider for matching
 		##### Need not be initialised. Initialised as code runs
 		final_peaks, self.__peak_indices = self.__preprocess_power(raw_dataframe)
 		self.__off_regions = [e for e,p in enumerate(self.power) if p == 0]
@@ -43,6 +47,7 @@ class PatternLength:
 			no_iter += 1
 			if no_iter >= 5:
 				raise ValueError('Could not find segments for signal. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')	
+		self.p_array, self.p_indices = self.__find_matches()
 
 	def __partition_states(self):
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
@@ -66,9 +71,9 @@ class PatternLength:
 		### Looking for patterns that start and stop with all possible min states.
 		pattern_sets = dict()
 		patterns_unique = []
-		min_states, max_states = self.__partition_states()
+		self.min_states, self.max_states = self.__partition_states()
 		for init_ind in range(len(self.__sequence)-self.min_len):
-			if self.__sequence[init_ind] in min_states:
+			if self.__sequence[init_ind] in self.min_states:
 				p_temp = self.__sequence[init_ind:init_ind+self.max_len]
 				try:
 					end_ind = self.min_len-1+p_temp[self.min_len-1:].index(p_temp[0])+1
@@ -240,11 +245,7 @@ class PatternLength:
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
 		## Filtering
-		# b, a = butter(3,0.5)
-		# power_f = filtfilt(b, a, self.power)
-		# min_power = np.min(power_f)
-		# if min_power < 0:
-		# 	power_f = power_f + abs(min_power)
+		# power_f = savgol_filter(self.power, 5,2,mode='nearest')
 
 		power_f = self.power   ## No filtering
 		
@@ -307,26 +308,89 @@ class PatternLength:
 		start_ind = 0
 		pattern_sequence = []
 		pattern_sequence_indices = []
-		while start_ind < len(self.__sequence)-self.min_len:
+
+		idle_states = []
+		for pt,freq in self.__pattern_dict[self.idle_label]:
+			for s in pt:
+				if s not in idle_states:
+					idle_states.append(s)
+		
+		min_ws = np.inf
+		for pt,freq in self.__pattern_dict[self.working_label]:
+			for s in pt:
+				if s < min_ws and s not in self.max_states and s not in idle_states:
+					min_ws = s
+
+		if max(idle_states) == max(self.min_states):
+				idle_equal_min = True
+		else:
+			idle_equal_min = False
+
+		while start_ind < len(self.__sequence)-1:
 			min_pdist = []
 			end_ind_l = []
 			req_labels = []
 			max_limit = self.__get_end_limits(start_ind)
+			
 			# print (start_ind, max_limit)
+			# print (self.__sequence[start_ind:max_limit])
+			contains_idle = any(s in self.__sequence[start_ind+self.uni_min:max_limit] for s in idle_states)
+			
+			if min_ws != np.inf:
+				if min_ws in self.__sequence[start_ind+self.uni_min:max_limit]:
+					contains_min = True
+				else:
+					contains_min = False
+			else:
+				contains_min = False
+			
 			for label, p_set in self.__pattern_dict.items():
-				pattern, freq = max(p_set, key=lambda x:x[1])	
-				dists = []
-				ends = []
-				end_ind_t = start_ind+self.min_len
-				if end_ind_t > max_limit:
-					end_ind_t = max_limit
-				while end_ind_t <= max_limit:
-					p_temp = self.__sequence[start_ind:end_ind_t]
-					dist = self.__pattern_distance(p_temp,pattern)
-					dists.append(dist)
-					ends.append(end_ind_t)
-					end_ind_t +=1
-				
+				sorted_patterns	= sorted(p_set, key=lambda x:x[1], reverse=True)
+				for pattern,freq in sorted_patterns[:self.no_max_freq]:	
+					dists = []
+					ends = []
+					end_ind_t = start_ind+self.uni_min
+					if end_ind_t > max_limit:
+						end_ind_t = max_limit
+					starting_end_ind_t = end_ind_t
+			
+					while end_ind_t <= max_limit:
+						if not idle_equal_min:
+							if contains_idle:
+								if self.__sequence[end_ind_t-1] in idle_states:
+									p_temp = self.__sequence[start_ind:end_ind_t]
+									if self.__sequence[end_ind_t-1] != self.__sequence[end_ind_t-2] or starting_end_ind_t == end_ind_t:
+										dist = self.__pattern_distance(p_temp,pattern)
+										# print (p_temp, pattern, dist)
+										dists.append(dist)
+										ends.append(end_ind_t)
+
+							elif contains_min:
+								if self.__sequence[end_ind_t-1] == min_ws:
+									p_temp = self.__sequence[start_ind:end_ind_t]
+									if self.__sequence[end_ind_t-1] != self.__sequence[end_ind_t-2] or starting_end_ind_t == end_ind_t:
+										dist = self.__pattern_distance(p_temp,pattern)
+										# print (p_temp, pattern, dist)
+										dists.append(dist)
+										ends.append(end_ind_t)
+
+							else:
+								p_temp = self.__sequence[start_ind:end_ind_t]
+								dist = self.__pattern_distance(p_temp,pattern)
+								# print (p_temp, pattern, dist)
+								dists.append(dist)
+								ends.append(end_ind_t)
+
+						else:
+							p_temp = self.__sequence[start_ind:end_ind_t]
+							dist = self.__pattern_distance(p_temp,pattern)
+							# print (p_temp, pattern, dist)
+							dists.append(dist)
+							ends.append(end_ind_t)
+
+						end_ind_t +=1
+
+		
 				### preferring longer patterns rather than shorter ones intra pattern
 				min_dist = min(dists)
 				for e,d in enumerate(dists):
@@ -344,6 +408,26 @@ class PatternLength:
 				if end_ind_l[e] < end_ind and d == req_pdist:   ## shorter inter patterns
 					end_ind = end_ind_l[e]
 					final_label = req_labels[e]
+
+			#### Check if pattern has a minimum within itself
+			if any(s in idle_states for s in self.__sequence[start_ind+self.uni_min:end_ind-1]) and final_label == self.working_label:
+				dist_n = np.inf
+				for e, s in enumerate(self.__sequence[start_ind+self.uni_min:end_ind-1]):
+					if s in idle_states:
+						idle_ind = start_ind+self.uni_min+e
+					
+						for label, p_set in self.__pattern_dict.items():
+							sorted_patterns	= sorted(p_set, key=lambda x:x[1], reverse=True)
+							for pattern,freq in sorted_patterns[:self.no_max_freq]:
+								temp_dist = self.__pattern_distance(pattern, self.__sequence[idle_ind:end_ind])
+								# print (self.__sequence[idle_ind:end_ind],pattern, temp_dist)
+												
+								if dist_n > temp_dist:
+									dist_n = temp_dist
+									new_end_ind = idle_ind
+
+				if dist_n <= req_pdist:
+					end_ind = new_end_ind+1
  
 			p_mean = np.mean([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			p_var = np.std([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
@@ -382,26 +466,25 @@ class PatternLength:
  	
 	def get_average_cycle_time(self):
 		print ('Getting Average Cycle Time...')
-		p_array, p_indices = self.__find_matches()
-		unique_labels, counts = np.unique(p_array, return_counts=True)
+		unique_labels, counts = np.unique(self.p_array, return_counts=True)
 
 		print ('Mapping time indices...')
 		simplified_seq = np.zeros((len(self.power)))
 		start_ind = 0
-		for e,i in enumerate(p_indices):
-			simplified_seq[start_ind:self.__peak_indices[i]+2] = p_array[e]
+		for e,i in enumerate(self.p_indices):
+			simplified_seq[start_ind:self.__peak_indices[i]+2] = self.p_array[e]
 			start_ind = self.__peak_indices[i]+2
 		simplified_seq[self.__off_regions] = 2
 
 		p_l = 0
-		for e,p in enumerate(p_array):
+		for e,p in enumerate(self.p_array):
 			if p == self.working_label:
 				if e == 0:
-					if all(point not in range(self.__peak_indices[p_indices[0]],self.__peak_indices[p_indices[e]]+1) for point in self.__off_regions):
-						p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[0]]
+					if all(point not in range(self.__peak_indices[self.p_indices[0]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
+						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[0]]
 				else:
-					if all(point not in range(self.__peak_indices[p_indices[e-1]],self.__peak_indices[p_indices[e]]+1) for point in self.__off_regions):
-						p_l += self.__peak_indices[p_indices[e]] - self.__peak_indices[p_indices[e-1]]
+					if all(point not in range(self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
+						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[e-1]]
 		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
 		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
 
@@ -418,7 +501,7 @@ class PatternLength:
 		plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
 		data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
 		pattern_edges = len(time)*[None]
-		for ind in self.__peak_indices[p_indices]:
+		for ind in self.__peak_indices[self.p_indices]:
 			pattern_edges[ind] = self.power[ind]
 		# print (len([l for l in pattern_edges if l != None]))
 		data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
@@ -426,4 +509,13 @@ class PatternLength:
 		plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
 		return cycle_time
 
-## break of only when a low partition state comes.
+
+	def get_estimate_count(self):
+		unique_labels, counts = np.unique(self.p_array, return_counts=True)
+		working_ind = list(unique_labels).index(self.working_label)
+		estimate_count = counts[working_ind]
+		print ('No. of working patterns found : ' , estimate_count)
+		return estimate_count
+
+
+
