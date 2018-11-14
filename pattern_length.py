@@ -49,6 +49,75 @@ class PatternLength:
 				raise ValueError('Could not find segments for signal. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')	
 		self.p_array, self.p_indices = self.__find_matches()
 
+	
+	@ timing_wrapper
+	def __preprocess_power(self, df):
+		print ('Preprocessing power...')
+		### Preprocessing
+		df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
+		self.power = np.zeros((86400))
+		self.power[0] = df.iloc[0,0]
+		offset = int(df.iloc[0,1])
+		t = offset
+		for i in range(1,df.shape[0]):
+			if int(df.iloc[i,1]) != t:
+				if round(df.iloc[i,1]-t) == 1.0:
+					self.power[t+1-offset] = df.iloc[i,0]
+					t+=1			
+				elif int(df.iloc[i,1])-t < 11.0:
+					orig_t = t
+					req_offset = orig_t+1-offset
+					for j in range(int(df.iloc[i,1]-orig_t)):
+						self.power[req_offset+j] = (df.iloc[i,0]+df.iloc[i-1,0])/2
+						t+=1
+				else:
+					orig_t = t
+					req_offset = orig_t+1-offset
+					for j in range(int(df.iloc[i,1]-orig_t)):
+						self.power[req_offset+j] = 0
+						t+=1
+			else: 
+				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
+		
+		## Filtering
+		# power_f = savgol_filter(self.power, 5,2,mode='nearest')
+
+		power_f = self.power   ## No filtering
+		### Detecting Peaks
+		peak_indices_list = []
+		power_fi = power_f
+		for i in range(self.order):
+			peak_indicesi, _ = find_peaks(power_fi)
+			power_fi = power_fi[peak_indicesi]
+			peak_indices_list.append(peak_indicesi)
+		peak_indices = peak_indices_list[0]
+		
+		for j in range(1,self.order):
+			peak_indices = peak_indices[peak_indices_list[j]]
+		final_peaks = power_f[peak_indices]
+		return final_peaks, peak_indices
+		
+	@timing_wrapper
+	def __discretise_power(self, final_peaks):
+		print ('Discretising power...')
+		### Discretising Values
+		X = np.array(final_peaks).reshape(-1,1)
+		gamma = np.std(final_peaks)/(len(final_peaks))
+		dpgmm = BayesianGaussianMixture(n_components=self.n_states,max_iter= 500,covariance_type='spherical',random_state=0).fit(X)
+		unordered_labels = dpgmm.predict(X)
+		original_means = [x[0] for x in dpgmm.means_]
+		sorted_means = sorted(dpgmm.means_, key=lambda x:x[0])
+		labels = [sorted_means.index(dpgmm.means_[l][0]) for l in unordered_labels]
+		
+		states = np.unique(labels)
+		state_attributes = dict()
+		for s in states:
+			mean = sorted_means[s][0]
+			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
+		
+		return labels, state_attributes
+
+
 	def __partition_states(self):
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
 		kmeans = KMeans(2).fit(seq_means)
@@ -164,6 +233,7 @@ class PatternLength:
 				
 		return cluster_subseqs
 	
+
 	def __cluster_patterns(self, seq_f):
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs = self.__dtw_clustering(seq_f)
@@ -215,75 +285,6 @@ class PatternLength:
 			print (cluster_seqs[k])
 		return cluster_seqs
 
-	@ timing_wrapper
-	def __preprocess_power(self, df):
-		print ('Preprocessing power...')
-		### Preprocessing
-		df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
-		self.power = np.zeros((86400))
-		self.power[0] = df.iloc[0,0]
-		offset = int(df.iloc[0,1])
-		t = offset
-		for i in range(1,df.shape[0]):
-			if int(df.iloc[i,1]) != t:
-				if round(df.iloc[i,1]-t) == 1.0:
-					self.power[t+1-offset] = df.iloc[i,0]
-					t+=1			
-				elif int(df.iloc[i,1])-t < 11.0:
-					orig_t = t
-					req_offset = orig_t+1-offset
-					for j in range(int(df.iloc[i,1]-orig_t)):
-						self.power[req_offset+j] = (df.iloc[i,0]+df.iloc[i-1,0])/2
-						t+=1
-				else:
-					orig_t = t
-					req_offset = orig_t+1-offset
-					for j in range(int(df.iloc[i,1]-orig_t)):
-						self.power[req_offset+j] = 0
-						t+=1
-			else: 
-				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
-		
-		## Filtering
-		# power_f = savgol_filter(self.power, 5,2,mode='nearest')
-
-		power_f = self.power   ## No filtering
-		
-		### Detecting Peaks
-		peak_indices_list = []
-		power_fi = power_f
-		for i in range(self.order):
-			peak_indicesi, _ = find_peaks(power_fi)
-			power_fi = power_fi[peak_indicesi]
-			peak_indices_list.append(peak_indicesi)
-		peak_indices = peak_indices_list[0]
-		
-		for j in range(1,self.order):
-			peak_indices = peak_indices[peak_indices_list[j]]
-		final_peaks = power_f[peak_indices]
-
-		return final_peaks, peak_indices
-		
-	@timing_wrapper
-	def __discretise_power(self, final_peaks):
-		print ('Discretising power...')
-		### Discretising Values
-		X = np.array(final_peaks).reshape(-1,1)
-		gamma = np.std(final_peaks)/(len(final_peaks))
-		dpgmm = BayesianGaussianMixture(n_components=self.n_states,max_iter= 500,covariance_type='spherical',random_state=0).fit(X)
-		unordered_labels = dpgmm.predict(X)
-		original_means = [x[0] for x in dpgmm.means_]
-		sorted_means = sorted(dpgmm.means_, key=lambda x:x[0])
-		labels = [sorted_means.index(dpgmm.means_[l][0]) for l in unordered_labels]
-		
-		states = np.unique(labels)
-		state_attributes = dict()
-		for s in states:
-			mean = sorted_means[s][0]
-			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
-		
-		return labels, state_attributes
-
 	def __pattern_distance(self, head, pattern):
 		val_a = [self.__state_attributes[str(s)][0] for s in head]
 		val_b = [self.__state_attributes[str(s)][0] for s in pattern]
@@ -305,6 +306,7 @@ class PatternLength:
 	@timing_wrapper
 	def __find_matches(self):
 		print ('Matching Discovered Patterns...')
+		print (len(self.__sequence))
 		start_ind = 0
 		pattern_sequence = []
 		pattern_sequence_indices = []
@@ -314,6 +316,8 @@ class PatternLength:
 			for s in pt:
 				if s not in idle_states:
 					idle_states.append(s)
+
+		print (idle_states)
 		
 		min_ws = np.inf
 		for pt,freq in self.__pattern_dict[self.working_label]:
@@ -321,10 +325,15 @@ class PatternLength:
 				if s < min_ws and s not in self.max_states and s not in idle_states:
 					min_ws = s
 
-		if max(idle_states) == max(self.min_states):
+		print (min_ws, 'min working')
+
+
+		if max(idle_states) >= max(self.min_states):
 				idle_equal_min = True
 		else:
 			idle_equal_min = False
+
+		print (max(idle_states),  max(self.min_states))
 
 		while start_ind < len(self.__sequence)-1:
 			min_pdist = []
@@ -390,17 +399,16 @@ class PatternLength:
 
 						end_ind_t +=1
 
-		
-				### preferring longer patterns rather than shorter ones intra pattern
-				min_dist = min(dists)
-				for e,d in enumerate(dists):
-					if d == min_dist:
-						end_ind_f = ends[e]
-						break                ## break included for finding short patterns
+					### preferring longer patterns rather than shorter ones intra pattern
+					min_dist = min(dists)
+					for e,d in enumerate(dists):
+						if d == min_dist:
+							end_ind_f = ends[e]
+							break                ## break included for finding short patterns
 				
-				min_pdist.append(min_dist)
-				end_ind_l.append(end_ind_f)
-				req_labels.append(label)
+					min_pdist.append(min_dist)
+					end_ind_l.append(end_ind_f)
+					req_labels.append(label)
 			
 			req_pdist = min(min_pdist)
 			end_ind = np.inf 

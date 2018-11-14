@@ -44,6 +44,28 @@ class SignalSegmentation:
 		if len(self.patterns) == 1:
 			raise ValueError('Required number of patterns not found')
 
+	@timing_wrapper
+	def __discover_segmentation_pattern(self):
+		self.__get_patterns()
+		if len(self.patterns) == 1:
+			self.pattern_dict = {0: [self.patterns[0]]}
+			return self.patterns[0][0]
+		
+		### Looking for signals which start and stop with minimas. Need to discover most likely candidate. 
+		possible_patterns = []
+		for seq in self.patterns:
+			if all(s >= seq[0][0] for s in seq[0]):
+				possible_patterns.append(seq)
+
+		### Clustering with DTW to find patterns. Exemplars from DTW -> final patterns 
+		### These clustered based on mean and variance to identify idle and working patterns
+		if len(possible_patterns) > 1:
+			self.pattern_dict = self.__cluster_patterns(possible_patterns)
+		
+		elif len(possible_patterns) == 1:
+			self.pattern_dict = {0: [self.patterns[0]]}
+
+
 	def __dtw_clustering(self, seq_f):
 		### Clustering sequences using affinity propagation, dtw
 		### Computing similarity/affinity matrix using dtw
@@ -79,6 +101,7 @@ class SignalSegmentation:
 				cluster_subseqs[label].append(seq)
 				
 		return cluster_subseqs
+
 
 	@timing_wrapper
 	def __cluster_patterns(self, seq_f):
@@ -135,27 +158,6 @@ class SignalSegmentation:
 
 		return cluster_seqs
 
-	@timing_wrapper
-	def __discover_segmentation_pattern(self):
-		self.__get_patterns()
-		if len(self.patterns) == 1:
-			self.pattern_dict = {0: [self.patterns[0]]}
-			return self.patterns[0][0]
-		
-		### Looking for signals which start and stop with minimas. Need to discover most likely candidate. 
-		possible_patterns = []
-		for seq in self.patterns:
-			if all(s >= seq[0][0] for s in seq[0]):
-				possible_patterns.append(seq)
-
-		### Clustering with DTW to find patterns. Exemplars from DTW -> final patterns 
-		### These clustered based on mean and variance to identify idle and working patterns
-		if len(possible_patterns) > 1:
-			self.pattern_dict = self.__cluster_patterns(possible_patterns)
-		
-		elif len(possible_patterns) == 1:
-			self.pattern_dict = {0: [self.patterns[0]]}
-
 
 	def __pattern_distance(self,a,b):
 		val_a = [self.state_attributes[str(s)][0] for s in a]
@@ -181,6 +183,7 @@ class SignalSegmentation:
 	@timing_wrapper
 	def __find_matches(self):
 		print ('Matching Discovered Patterns...')
+		print (len(self.sequence))
 		start_ind = 0
 		pattern_sequence = []
 		pattern_sequence_indices = []
@@ -190,19 +193,21 @@ class SignalSegmentation:
 				if s not in idle_states:
 					idle_states.append(s)
 		
+		print (idle_states)
+
 		min_ws = np.inf
 		for pt,freq in self.pattern_dict[self.working_label]:
 			for s in pt:
 				if s < min_ws and s not in self.pm.max_states and s not in idle_states:
 					min_ws = s
-		# print (min_ws, 'min working')
+		print (min_ws, 'min working')
 
-		if max(idle_states) == max(self.pm.min_states):
+		if max(idle_states) >= max(self.pm.min_states):
 				idle_equal_min = True
 		else:
 			idle_equal_min = False
 
-		# print (max(idle_states),  max(self.pm.min_states))
+		print (max(idle_states),  max(self.pm.min_states))
 
 
 		while start_ind < len(self.sequence)-1:
@@ -311,8 +316,8 @@ class SignalSegmentation:
 			p_var = np.std([self.state_attributes[str(s)][0] for s in self.sequence[start_ind:end_ind]])
 			req_label = self.predictor.predict(np.array([[p_mean, p_var]]))
 			# if np.std(self.sequence[start_ind:end_ind]) !=0 :
-			# print (self.sequence[start_ind:end_ind])
-			# print (final_label, req_label)
+			print (self.sequence[start_ind:end_ind])
+			print (final_label, req_label)
 			# print ('#################################')
 			
 			if end_ind <= len(self.sequence):
