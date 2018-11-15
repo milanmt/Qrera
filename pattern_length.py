@@ -296,12 +296,12 @@ class PatternLength:
 		if self.__off_regions:
 			for i in range(start_ind+1,max_limit+1):
 				if i+1 >= len(self.__peak_indices):
-					return len(self.__peak_indices)
+					return len(self.__peak_indices), False
 				if any(point in range(self.__peak_indices[i],self.__peak_indices[i+1]+1) for point in self.__off_regions):
-					return i+2
-			return max_limit
+					return i+2, True
+			return max_limit, False
 		else:
-			return max_limit
+			return max_limit, False
 
 	@timing_wrapper
 	def __find_matches(self):
@@ -316,8 +316,6 @@ class PatternLength:
 			for s in pt:
 				if s not in idle_states:
 					idle_states.append(s)
-
-		print (idle_states)
 		
 		min_ws = np.inf
 		for pt,freq in self.__pattern_dict[self.working_label]:
@@ -325,28 +323,23 @@ class PatternLength:
 				if s < min_ws and s not in self.max_states and s not in idle_states:
 					min_ws = s
 
-		print (min_ws, 'min working')
-
-
 		if max(idle_states) >= max(self.min_states):
-				idle_equal_min = True
+			idle_equal_min = True
 		else:
 			idle_equal_min = False
-
-		print (max(idle_states),  max(self.min_states))
 
 		while start_ind < len(self.__sequence)-1:
 			min_pdist = []
 			end_ind_l = []
 			req_labels = []
-			max_limit = self.__get_end_limits(start_ind)
+			max_limit, off_region_present = self.__get_end_limits(start_ind)
 			
 			# print (start_ind, max_limit)
 			# print (self.__sequence[start_ind:max_limit])
-			contains_idle = any(s in self.__sequence[start_ind+self.uni_min:max_limit] for s in idle_states)
+			contains_idle = any(s in self.__sequence[start_ind+self.uni_min-1:max_limit] for s in idle_states)
 			
 			if min_ws != np.inf:
-				if min_ws in self.__sequence[start_ind+self.uni_min:max_limit]:
+				if min_ws in self.__sequence[start_ind+self.uni_min-1:max_limit]:
 					contains_min = True
 				else:
 					contains_min = False
@@ -399,7 +392,7 @@ class PatternLength:
 
 						end_ind_t +=1
 
-					### preferring longer patterns rather than shorter ones intra pattern
+					### preferring short patterns rather than longer ones intra pattern
 					min_dist = min(dists)
 					for e,d in enumerate(dists):
 						if d == min_dist:
@@ -418,11 +411,11 @@ class PatternLength:
 					final_label = req_labels[e]
 
 			#### Check if pattern has a minimum within itself
-			if any(s in idle_states for s in self.__sequence[start_ind+self.uni_min:end_ind-1]) and final_label == self.working_label:
+			if any(s in idle_states for s in self.__sequence[start_ind+self.uni_min-1:end_ind-1]) and final_label == self.working_label:
 				dist_n = np.inf
-				for e, s in enumerate(self.__sequence[start_ind+self.uni_min:end_ind-1]):
+				for e, s in enumerate(self.__sequence[start_ind+self.uni_min-1:end_ind-1]):
 					if s in idle_states:
-						idle_ind = start_ind+self.uni_min+e
+						idle_ind = start_ind+self.uni_min-1+e
 					
 						for label, p_set in self.__pattern_dict.items():
 							sorted_patterns	= sorted(p_set, key=lambda x:x[1], reverse=True)
@@ -440,11 +433,20 @@ class PatternLength:
 			p_mean = np.mean([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			p_var = np.std([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			req_label = self.__pattern_predictor.predict(np.array([[p_mean, p_var]]))
-			print (self.__sequence[start_ind:end_ind])
-			print (final_label, req_label)
+			if np.std(self.__sequence[start_ind:end_ind]) != 0:
+				print (self.__sequence[start_ind:end_ind])
+				print (final_label, req_label)
+			
 			pattern_sequence.append(req_label[0])
 			if end_ind <= len(self.__sequence):
 				pattern_sequence_indices.append(end_ind-1)
+			else:
+				pattern_sequence_indices.append(len(self.__sequence)-1)
+
+			if off_region_present:
+				pattern_sequence.append(2)
+				pattern_sequence_indices.append(end_ind-1)
+				
 			start_ind = end_ind-1
 		
 		return pattern_sequence, pattern_sequence_indices
@@ -485,16 +487,30 @@ class PatternLength:
 		simplified_seq[self.__off_regions] = 2
 
 		p_l = 0
+		count_avg = 0
 		for e,p in enumerate(self.p_array):
 			if p == self.working_label:
 				if e == 0:
-					if all(point not in range(self.__peak_indices[self.p_indices[0]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
-						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[0]]
-				else:
+					if all(point not in range(0,self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
+						print (0,self.__peak_indices[self.p_indices[e]]+1)
+						print (self.__sequence[0:self.p_indices[e]+1])
+						p_l += self.__peak_indices[self.p_indices[e]]+1
+						count_avg += 1
+				elif e == len(self.p_array)-1:
 					if all(point not in range(self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
-						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[e-1]]
-		cycle_time = p_l/counts[list(unique_labels).index(self.working_label)]
-		print (p_l/counts[list(unique_labels).index(self.working_label)],'s -> Working Pattern')
+						print (self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1)
+						print (self.__sequence[self.p_indices[e-1]:self.p_indices[e]+1])
+						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[e-1]] + 1
+						count_avg += 1
+				else:
+					if self.p_array[e-1]!= 2 and self.p_array[e+1] !=2:
+						print (self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1)
+						print (self.__sequence[self.p_indices[e-1]:self.p_indices[e]+1])
+						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[e-1]] + 1
+						count_avg += 1
+
+		cycle_time = p_l/count_avg
+		print (cycle_time,'s -> Working Pattern')
 
 		print ('Plotting...')
 		unique_labels = list(np.unique(simplified_seq))
@@ -524,6 +540,4 @@ class PatternLength:
 		estimate_count = counts[working_ind]
 		print ('No. of working patterns found : ' , estimate_count)
 		return estimate_count
-
-
 
