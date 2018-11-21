@@ -114,7 +114,6 @@ class PatternLength:
 		for s in states:
 			mean = sorted_means[s][0]
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
-		
 		return labels, state_attributes
 
 
@@ -237,6 +236,11 @@ class PatternLength:
 	def __cluster_patterns(self, seq_f):
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs = self.__dtw_clustering(seq_f)
+		print ('--------------------')
+		for l in cluster_subseqs:
+			print (l)
+			print (cluster_subseqs[l])
+		print ('--------------------')
 		if len(cluster_subseqs) == 1:
 			return cluster_subseqs				
 		### Getting average variances and means of exemplars for classification
@@ -436,6 +440,18 @@ class PatternLength:
 			if np.std(self.__sequence[start_ind:end_ind]) != 0:
 				print (self.__sequence[start_ind:end_ind])
 				print (final_label, req_label)
+
+
+# ######################## new addition
+# 			if not pattern_sequence:
+# 				## do when its the first pattern
+# 				if req_label[0] == self.idle_label:
+# 					pattern_sequence.append(req_label[0])
+# 					pattern_sequence_indices.append(end_ind-1)
+# 				elif req_label[0] == self.working_label:
+# 					### check point it starts working
+# 			else:
+# ##############################################
 			
 			pattern_sequence.append(req_label[0])
 			if end_ind <= len(self.__sequence):
