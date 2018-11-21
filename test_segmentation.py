@@ -19,7 +19,7 @@ def initial_processing(f1,f2):
 	if f2 == None:
 		df = pandas.read_csv(f1)
 		df.sort_values(by='TS')
-		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:30:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
+		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 07:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
 		end_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 11:59:59', '%Y_%m_%d %H:%M:%S'), sep=' ')
 	else:
 		df1 = pandas.read_csv(f1)
@@ -27,7 +27,7 @@ def initial_processing(f1,f2):
 		df1.sort_values(by='TS')
 		df2.sort_values(by='TS')
 		df = pandas.concat([df1,df2])
-		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:30:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
+		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 07:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
 		end_time = datetime.isoformat(timedelta(days=1) + datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S'), sep=' ')
 
 	df = df[(df['TS'] >= start_time) & (df['TS'] < end_time)]

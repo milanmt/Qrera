@@ -55,6 +55,7 @@ class PatternLength:
 		print ('Preprocessing power...')
 		### Preprocessing
 		df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
+		# print (df.shape[0], 'orig_signal length')
 		self.power = np.zeros((86400))
 		self.power[0] = df.iloc[0,0]
 		offset = int(df.iloc[0,1])
@@ -81,8 +82,8 @@ class PatternLength:
 		
 		## Filtering
 		# power_f = savgol_filter(self.power, 5,2,mode='nearest')
-
 		power_f = self.power   ## No filtering
+
 		### Detecting Peaks
 		peak_indices_list = []
 		power_fi = power_f
@@ -95,6 +96,7 @@ class PatternLength:
 		for j in range(1,self.order):
 			peak_indices = peak_indices[peak_indices_list[j]]
 		final_peaks = power_f[peak_indices]
+		# print (len(final_peaks), 'peaks')
 		return final_peaks, peak_indices
 		
 	@timing_wrapper
@@ -103,6 +105,7 @@ class PatternLength:
 		### Discretising Values
 		X = np.array(final_peaks).reshape(-1,1)
 		gamma = np.std(final_peaks)/(len(final_peaks))
+		# print (gamma, 'gamma')
 		dpgmm = BayesianGaussianMixture(n_components=self.n_states,max_iter= 500,covariance_type='spherical',random_state=0).fit(X)
 		unordered_labels = dpgmm.predict(X)
 		original_means = [x[0] for x in dpgmm.means_]
@@ -114,6 +117,7 @@ class PatternLength:
 		for s in states:
 			mean = sorted_means[s][0]
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
+		# print ('states ->', state_attributes)
 		return labels, state_attributes
 
 
@@ -133,6 +137,7 @@ class PatternLength:
 				max_states.append(int(state))
 			else:
 				min_states.append(int(state))
+		# print ('min and max states', min_states, max_states)
 		return min_states, max_states
 
 	def __mine_patterns(self):
@@ -140,6 +145,7 @@ class PatternLength:
 		pattern_sets = dict()
 		patterns_unique = []
 		self.min_states, self.max_states = self.__partition_states()
+		# print ('Printing unique patterns')
 		for init_ind in range(len(self.__sequence)-self.min_len):
 			if self.__sequence[init_ind] in self.min_states:
 				p_temp = self.__sequence[init_ind:init_ind+self.max_len]
@@ -161,6 +167,7 @@ class PatternLength:
 								p_set[p] +=1
 							break
 					if new_pattern:
+						# print (p)
 						pattern_sets.update({p : {p :1}})
 
 		### Finding most frequent pattern
@@ -175,6 +182,7 @@ class PatternLength:
 		if len(patterns_unique) == 1:
 			raise SinglePatternError('Only one pattern found. Check raw signal. Signal too small for min and max length of patterns.')
 
+		# print ('len unique patterns', len(patterns_unique))
 		return patterns_unique
 		
 	@timing_wrapper
@@ -236,11 +244,11 @@ class PatternLength:
 	def __cluster_patterns(self, seq_f):
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs = self.__dtw_clustering(seq_f)
-		print ('--------------------')
-		for l in cluster_subseqs:
-			print (l)
-			print (cluster_subseqs[l])
-		print ('--------------------')
+		# print ('--------------------')
+		# for l in cluster_subseqs:
+		# 	print (l)
+		# 	print (cluster_subseqs[l])
+		# print ('--------------------')
 		if len(cluster_subseqs) == 1:
 			return cluster_subseqs				
 		### Getting average variances and means of exemplars for classification
@@ -256,6 +264,7 @@ class PatternLength:
 				avg_seq_l.append(avg)
 			cluster_mv[label][1] = np.mean(var_seq_l)
 			cluster_mv[label][0] = np.mean(avg_seq_l)
+		# print (cluster_mv, 'cluster_mv')
 
 		### KMeans 
 		kmeans = KMeans(2, random_state=3).fit(cluster_mv)
@@ -310,7 +319,7 @@ class PatternLength:
 	@timing_wrapper
 	def __find_matches(self):
 		print ('Matching Discovered Patterns...')
-		print (len(self.__sequence))
+		# print (len(self.__sequence))
 		start_ind = 0
 		pattern_sequence = []
 		pattern_sequence_indices = []
@@ -508,25 +517,25 @@ class PatternLength:
 			if p == self.working_label:
 				if e == 0:
 					if all(point not in range(0,self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
-						print (0,self.__peak_indices[self.p_indices[e]]+1)
-						print (self.__sequence[0:self.p_indices[e]+1])
+						# print (0,self.__peak_indices[self.p_indices[e]]+1)
+						# print (self.__sequence[0:self.p_indices[e]+1])
 						p_l += self.__peak_indices[self.p_indices[e]]+1
 						count_avg += 1
 				elif e == len(self.p_array)-1:
 					if all(point not in range(self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
-						print (self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1)
-						print (self.__sequence[self.p_indices[e-1]:self.p_indices[e]+1])
+						# print (self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1)
+						# print (self.__sequence[self.p_indices[e-1]:self.p_indices[e]+1])
 						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[e-1]] + 1
 						count_avg += 1
 				else:
 					if self.p_array[e-1]!= 2 and self.p_array[e+1] !=2:
-						print (self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1)
-						print (self.__sequence[self.p_indices[e-1]:self.p_indices[e]+1])
+						# print (self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1)
+						# print (self.__sequence[self.p_indices[e-1]:self.p_indices[e]+1])
 						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[e-1]] + 1
 						count_avg += 1
 
 		cycle_time = p_l/count_avg
-		print (cycle_time,'s -> Working Pattern')
+		print ('Avg cycle time ->', cycle_time)
 
 		print ('Plotting...')
 		unique_labels = list(np.unique(simplified_seq))
