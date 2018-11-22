@@ -48,7 +48,6 @@ class PatternLength:
 			if no_iter >= 5:
 				raise ValueError('Could not find segments for signal. Try again! Or-> Check if min_length of pattern is too small. Check if number of segments are  suitable for data.')	
 		self.p_array, self.p_indices = self.__find_matches()
-
 	
 	@ timing_wrapper
 	def __preprocess_power(self, df):
@@ -80,7 +79,7 @@ class PatternLength:
 			else: 
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
-		## Filtering
+		### Filtering
 		# power_f = savgol_filter(self.power, 5,2,mode='nearest')
 		power_f = self.power   ## No filtering
 
@@ -96,6 +95,13 @@ class PatternLength:
 		for j in range(1,self.order):
 			peak_indices = peak_indices[peak_indices_list[j]]
 		final_peaks = power_f[peak_indices]
+
+		### Adding intial and final power values to maintain completeness
+		np.insert(final_peaks,0, power_f[0])
+		np.insert(peak_indices,0,0)
+		np.append(final_peaks,power_f[-1])
+		np.append(peak_indices,len(power_f)-1)
+		
 		# print (len(final_peaks), 'peaks')
 		return final_peaks, peak_indices
 		
@@ -117,9 +123,9 @@ class PatternLength:
 		for s in states:
 			mean = sorted_means[s][0]
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
+		
 		# print ('states ->', state_attributes)
 		return labels, state_attributes
-
 
 	def __partition_states(self):
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
@@ -240,7 +246,6 @@ class PatternLength:
 				
 		return cluster_subseqs
 	
-
 	def __cluster_patterns(self, seq_f):
 		### Clustering sequences using dtw and affinity propagation
 		cluster_subseqs = self.__dtw_clustering(seq_f)
@@ -450,24 +455,46 @@ class PatternLength:
 				print (self.__sequence[start_ind:end_ind])
 				print (final_label, req_label)
 
+			### Increasing resolution
+			working_mean = self.__pattern_predictor.cluster_centers_[self.working_label][0]
+			working_var = self.__pattern_predictor.cluster_centers_[self.working_label][1]
+			idle_mean = self.__pattern_predictor.cluster_centers_[self.idle_label][0]
+			idle_var = self.__pattern_predictor.cluster_centers_[self.idle_label][1]
+			real_power = self.power[self.__peak_indices[start_ind]:self.__peak_indices[end_ind-1]+2]
+			start_w = None
+			end_w = None 
+			for e, v in enumerate(real_power):
+				if v > idle_mean+idle_var:
+					start_w = self.__peak_indices[start_ind]+e
+					break
+			for e, v in enumerate(real_power[::-1]):
+				if v > idle_mean+idle_var:
+					end_w = self.__peak_indices[start_ind]+len(real_power)-1-e
+					break 
 
-# ######################## new addition
-# 			if not pattern_sequence:
-# 				## do when its the first pattern
-# 				if req_label[0] == self.idle_label:
-# 					pattern_sequence.append(req_label[0])
-# 					pattern_sequence_indices.append(end_ind-1)
-# 				elif req_label[0] == self.working_label:
-# 					### check point it starts working
-# 			else:
-# ##############################################
-			
-			pattern_sequence.append(req_label[0])
-			if end_ind <= len(self.__sequence):
-				pattern_sequence_indices.append(end_ind-1)
+			if start_w != None and end_w != None:
+				print ('doing new thing')
+				pattern_sequence.append(self.idle_label)
+				pattern_sequence_indices.append(start_w-1)						
+				pattern_sequence.append(req_label[0])
+				pattern_sequence_indices.append(end_w)
+				if off_region_present:
+					pattern_sequence.append(2)
+					pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+2)
+				pattern_sequence.append(self.idle_label[0])
+				pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+2)
+				if off_region_present:
+					pattern_sequence.append(2)
+					pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+2)
 			else:
-				pattern_sequence_indices.append(len(self.__sequence)-1)
+				pattern_sequence.append(req_label[0])
+				if end_ind <= len(self.__sequence):
+					pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+2)
+				else:
+					pattern_sequence_indices.append(len(self.power)-1)
 
+			
+##### How do you deal with off regions in new scenario
 			if off_region_present:
 				pattern_sequence.append(2)
 				pattern_sequence_indices.append(end_ind-1)
@@ -498,7 +525,6 @@ class PatternLength:
 						return True
 		return False
  
- 	
 	def get_average_cycle_time(self):
 		print ('Getting Average Cycle Time...')
 		unique_labels, counts = np.unique(self.p_array, return_counts=True)
@@ -557,7 +583,6 @@ class PatternLength:
 		fig = go.Figure(data = data)
 		plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
 		return cycle_time
-
 
 	def get_estimate_count(self):
 		unique_labels, counts = np.unique(self.p_array, return_counts=True)
