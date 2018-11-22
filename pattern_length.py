@@ -125,7 +125,7 @@ class PatternLength:
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
 		
 		# print ('states ->', state_attributes)
-		return labels[0:100], state_attributes
+		return labels, state_attributes
 
 	def __partition_states(self):
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
@@ -311,6 +311,8 @@ class PatternLength:
 
 	def __get_end_limits(self, start_ind):
 		max_limit = start_ind+self.max_len
+		if max_limit > len(self.__sequence):
+			max_limit = len(self.__sequence)
 		if self.__off_regions:
 			for i in range(start_ind+1,max_limit+1):
 				if i+1 >= len(self.__peak_indices):
@@ -462,32 +464,41 @@ class PatternLength:
 			idle_var = self.__pattern_predictor.cluster_centers_[self.idle_label][1]
 			real_power = self.power[self.__peak_indices[start_ind]:self.__peak_indices[end_ind-1]+2]
 				
-			if off_region_present:
+			if any(p in self.__off_regions for p in range(self.__peak_indices[start_ind],self.__peak_indices[end_ind-1]+2)):
+				print ('off region case')
+				# print (self.__peak_indices[start_ind], self.__peak_indices[end_ind-1]+1)
+				# print (real_power)
 				for e, v in enumerate(real_power):
 					if v == 0:
 						start_o = self.__peak_indices[start_ind]+e
+						# print (start_o)
 						rp_o_s = e
+						# print ('rpos', rp_o_s)
 						break
 				for e, v in enumerate(real_power[::-1]):
 					if v == 0:
 						end_o = self.__peak_indices[start_ind]+len(real_power)-1-e
-						rp_o_e = e
+						# print (end_o)
+						rp_o_e = len(real_power)-1-e
+						# print ('rpoe', rp_o_e)
 						break
 
 				rp_before_off = real_power[:rp_o_s]
+				# print (rp_before_off)
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(rp_before_off):
-					if v > idle_mean+idle_var:
+					if v > working_mean:
 						start_w = self.__peak_indices[start_ind]+e
+						# print ('start_w', start_w)
 						break
 				for e, v in enumerate(rp_before_off[::-1]):
-					if v > idle_mean+idle_var:
+					if v > working_mean:
 						end_w = self.__peak_indices[start_ind]+len(rp_before_off)-1-e
+						# print ('end_w', end_w)
 						break 
 
 				if start_w != None and end_w != None:
-					print ('doing new thing')
 					if start_w != self.__peak_indices[start_ind]:
 						pattern_sequence.append(self.idle_label)
 						pattern_sequence_indices.append(start_w-1)						
@@ -495,39 +506,38 @@ class PatternLength:
 					pattern_sequence_indices.append(end_w+1)
 					if end_w != start_o-1:
 						pattern_sequence.append(self.idle_label)
-						pattern_sequence_indices.append(start_o-1)
+						pattern_sequence_indices.append(start_o)
 				else:
 					pattern_sequence.append(req_label[0])
 					if end_ind <= len(self.power):
-						pattern_sequence_indices.append(start_o-1)
+						pattern_sequence_indices.append(start_o)
 					else:
 						pattern_sequence_indices.append(len(self.power)-1)
 
 				pattern_sequence.append(2)
-				pattern_sequence.append(end_o)
+				pattern_sequence_indices.append(end_o)
 
 				rp_after_off = real_power[rp_o_e+1:]
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(rp_after_off):
-					if v > idle_mean+idle_var:
+					if v > working_mean:
 						start_w = self.__peak_indices[start_ind]+rp_o_e+1+e
 						break
 				for e, v in enumerate(rp_before_off[::-1]):
-					if v > idle_mean+idle_var:
+					if v > working_mean:
 						end_w = self.__peak_indices[start_ind]+rp_o_e+1+len(rp_before_off)-1-e
 						break 
 
 				if start_w != None and end_w != None:
-					print ('doing new thing')
 					if start_w != self.__peak_indices[start_ind]+rp_o_e+1:
 						pattern_sequence.append(self.idle_label)
-						pattern_sequence_indices.append(start_w-1)						
-					pattern_sequence.append(req_label[0])
+						pattern_sequence_indices.append(start_w-1)
+					pattern_sequence.append(3)
 					pattern_sequence_indices.append(end_w+1)
 					if end_w != self.__peak_indices[end_ind-1]-1:
 						pattern_sequence.append(self.idle_label)
-						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]-1)
+						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
 
 				else:
 					pattern_sequence.append(req_label[0])
@@ -540,16 +550,15 @@ class PatternLength:
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(real_power):
-					if v > idle_mean+idle_var:
+					if v > working_mean:
 						start_w = self.__peak_indices[start_ind]+e
 						break
 				for e, v in enumerate(real_power[::-1]):
-					if v > idle_mean+idle_var:
+					if v > working_mean:
 						end_w = self.__peak_indices[start_ind]+len(real_power)-1-e
 						break 
 
 				if start_w != None and end_w != None:
-					print ('doing new thing')
 					if start_w != self.__peak_indices[start_ind]:
 						pattern_sequence.append(self.idle_label)
 						pattern_sequence_indices.append(start_w-1)						
@@ -557,7 +566,7 @@ class PatternLength:
 					pattern_sequence_indices.append(end_w+1)
 					if end_w != self.__peak_indices[end_ind-1]-1:
 						pattern_sequence.append(self.idle_label)
-						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]-1)
+						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
 
 				else:
 					pattern_sequence.append(req_label[0])
@@ -628,6 +637,7 @@ class PatternLength:
 		unique_labels = list(np.unique(simplified_seq))
 		y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
 		for e,el in enumerate(simplified_seq):
+			# print (e,el)
 			if el == 2:
 				y_plot[unique_labels.index(el),e] = 1500
 			else:
@@ -637,7 +647,7 @@ class PatternLength:
 		plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
 		data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
 		pattern_edges = len(time)*[None]
-		for ind in self.__peak_indices[self.p_indices]:
+		for ind in self.p_indices:
 			pattern_edges[ind] = self.power[ind]
 		# print (len([l for l in pattern_edges if l != None]))
 		data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
@@ -651,4 +661,3 @@ class PatternLength:
 		estimate_count = counts[working_ind]
 		print ('No. of working patterns found : ' , estimate_count)
 		return estimate_count
-
