@@ -125,7 +125,7 @@ class PatternLength:
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
 		
 		# print ('states ->', state_attributes)
-		return labels, state_attributes
+		return labels[0:100], state_attributes
 
 	def __partition_states(self):
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
@@ -461,44 +461,111 @@ class PatternLength:
 			idle_mean = self.__pattern_predictor.cluster_centers_[self.idle_label][0]
 			idle_var = self.__pattern_predictor.cluster_centers_[self.idle_label][1]
 			real_power = self.power[self.__peak_indices[start_ind]:self.__peak_indices[end_ind-1]+2]
-			start_w = None
-			end_w = None 
-			for e, v in enumerate(real_power):
-				if v > idle_mean+idle_var:
-					start_w = self.__peak_indices[start_ind]+e
-					break
-			for e, v in enumerate(real_power[::-1]):
-				if v > idle_mean+idle_var:
-					end_w = self.__peak_indices[start_ind]+len(real_power)-1-e
-					break 
-
-			if start_w != None and end_w != None:
-				print ('doing new thing')
-				pattern_sequence.append(self.idle_label)
-				pattern_sequence_indices.append(start_w-1)						
-				pattern_sequence.append(req_label[0])
-				pattern_sequence_indices.append(end_w)
-				if off_region_present:
-					pattern_sequence.append(2)
-					pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+2)
-				pattern_sequence.append(self.idle_label[0])
-				pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+2)
-				if off_region_present:
-					pattern_sequence.append(2)
-					pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+2)
-			else:
-				pattern_sequence.append(req_label[0])
-				if end_ind <= len(self.__sequence):
-					pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+2)
-				else:
-					pattern_sequence_indices.append(len(self.power)-1)
-
-			
-##### How do you deal with off regions in new scenario
-			if off_region_present:
-				pattern_sequence.append(2)
-				pattern_sequence_indices.append(end_ind-1)
 				
+			if off_region_present:
+				for e, v in enumerate(real_power):
+					if v == 0:
+						start_o = self.__peak_indices[start_ind]+e
+						rp_o_s = e
+						break
+				for e, v in enumerate(real_power[::-1]):
+					if v == 0:
+						end_o = self.__peak_indices[start_ind]+len(real_power)-1-e
+						rp_o_e = e
+						break
+
+				rp_before_off = real_power[:rp_o_s]
+				start_w = None
+				end_w = None 
+				for e, v in enumerate(rp_before_off):
+					if v > idle_mean+idle_var:
+						start_w = self.__peak_indices[start_ind]+e
+						break
+				for e, v in enumerate(rp_before_off[::-1]):
+					if v > idle_mean+idle_var:
+						end_w = self.__peak_indices[start_ind]+len(rp_before_off)-1-e
+						break 
+
+				if start_w != None and end_w != None:
+					print ('doing new thing')
+					if start_w != self.__peak_indices[start_ind]:
+						pattern_sequence.append(self.idle_label)
+						pattern_sequence_indices.append(start_w-1)						
+					pattern_sequence.append(req_label[0])
+					pattern_sequence_indices.append(end_w+1)
+					if end_w != start_o-1:
+						pattern_sequence.append(self.idle_label)
+						pattern_sequence_indices.append(start_o-1)
+				else:
+					pattern_sequence.append(req_label[0])
+					if end_ind <= len(self.power):
+						pattern_sequence_indices.append(start_o-1)
+					else:
+						pattern_sequence_indices.append(len(self.power)-1)
+
+				pattern_sequence.append(2)
+				pattern_sequence.append(end_o)
+
+				rp_after_off = real_power[rp_o_e+1:]
+				start_w = None
+				end_w = None 
+				for e, v in enumerate(rp_after_off):
+					if v > idle_mean+idle_var:
+						start_w = self.__peak_indices[start_ind]+rp_o_e+1+e
+						break
+				for e, v in enumerate(rp_before_off[::-1]):
+					if v > idle_mean+idle_var:
+						end_w = self.__peak_indices[start_ind]+rp_o_e+1+len(rp_before_off)-1-e
+						break 
+
+				if start_w != None and end_w != None:
+					print ('doing new thing')
+					if start_w != self.__peak_indices[start_ind]+rp_o_e+1:
+						pattern_sequence.append(self.idle_label)
+						pattern_sequence_indices.append(start_w-1)						
+					pattern_sequence.append(req_label[0])
+					pattern_sequence_indices.append(end_w+1)
+					if end_w != self.__peak_indices[end_ind-1]-1:
+						pattern_sequence.append(self.idle_label)
+						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]-1)
+
+				else:
+					pattern_sequence.append(req_label[0])
+					if end_ind <= len(self.power):
+						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
+					else:
+						pattern_sequence_indices.append(len(self.power)-1)
+
+			else:
+				start_w = None
+				end_w = None 
+				for e, v in enumerate(real_power):
+					if v > idle_mean+idle_var:
+						start_w = self.__peak_indices[start_ind]+e
+						break
+				for e, v in enumerate(real_power[::-1]):
+					if v > idle_mean+idle_var:
+						end_w = self.__peak_indices[start_ind]+len(real_power)-1-e
+						break 
+
+				if start_w != None and end_w != None:
+					print ('doing new thing')
+					if start_w != self.__peak_indices[start_ind]:
+						pattern_sequence.append(self.idle_label)
+						pattern_sequence_indices.append(start_w-1)						
+					pattern_sequence.append(req_label[0])
+					pattern_sequence_indices.append(end_w+1)
+					if end_w != self.__peak_indices[end_ind-1]-1:
+						pattern_sequence.append(self.idle_label)
+						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]-1)
+
+				else:
+					pattern_sequence.append(req_label[0])
+					if end_ind <= len(self.__sequence):
+						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
+					else:
+						pattern_sequence_indices.append(len(self.power)-1)
+		
 			start_ind = end_ind-1
 		
 		return pattern_sequence, pattern_sequence_indices
@@ -533,8 +600,8 @@ class PatternLength:
 		simplified_seq = np.zeros((len(self.power)))
 		start_ind = 0
 		for e,i in enumerate(self.p_indices):
-			simplified_seq[start_ind:self.__peak_indices[i]+2] = self.p_array[e]
-			start_ind = self.__peak_indices[i]+2
+			simplified_seq[start_ind:i+1] = self.p_array[e]
+			start_ind = i+1
 		simplified_seq[self.__off_regions] = 2
 
 		p_l = 0
@@ -542,22 +609,16 @@ class PatternLength:
 		for e,p in enumerate(self.p_array):
 			if p == self.working_label:
 				if e == 0:
-					if all(point not in range(0,self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
-						# print (0,self.__peak_indices[self.p_indices[e]]+1)
-						# print (self.__sequence[0:self.p_indices[e]+1])
-						p_l += self.__peak_indices[self.p_indices[e]]+1
+					if all(point not in range(0,self.p_indices[e]+1) for point in self.__off_regions):
+						p_l += self.p_indices[e]+1
 						count_avg += 1
 				elif e == len(self.p_array)-1:
-					if all(point not in range(self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1) for point in self.__off_regions):
-						# print (self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1)
-						# print (self.__sequence[self.p_indices[e-1]:self.p_indices[e]+1])
-						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[e-1]] + 1
+					if all(point not in range(self.p_indices[e-1],self.p_indices[e]+1) for point in self.__off_regions):
+						p_l += self.p_indices[e] - self.p_indices[e-1] + 1
 						count_avg += 1
 				else:
 					if self.p_array[e-1]!= 2 and self.p_array[e+1] !=2:
-						# print (self.__peak_indices[self.p_indices[e-1]],self.__peak_indices[self.p_indices[e]]+1)
-						# print (self.__sequence[self.p_indices[e-1]:self.p_indices[e]+1])
-						p_l += self.__peak_indices[self.p_indices[e]] - self.__peak_indices[self.p_indices[e-1]] + 1
+						p_l += self.p_indices[e] - self.p_indices[e-1] + 1
 						count_avg += 1
 
 		cycle_time = p_l/count_avg
