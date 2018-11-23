@@ -331,6 +331,11 @@ class PatternLength:
 		pattern_sequence = []
 		pattern_sequence_indices = []
 
+		working_mean = self.__pattern_predictor.cluster_centers_[self.working_label][0]
+		working_var = self.__pattern_predictor.cluster_centers_[self.working_label][1]
+		idle_mean = self.__pattern_predictor.cluster_centers_[self.idle_label][0]
+		idle_var = self.__pattern_predictor.cluster_centers_[self.idle_label][1]
+
 		idle_states = []
 		for pt,freq in self.__pattern_dict[self.idle_label]:
 			for s in pt:
@@ -458,10 +463,6 @@ class PatternLength:
 				print (final_label, req_label)
 
 			### Increasing resolution
-			working_mean = self.__pattern_predictor.cluster_centers_[self.working_label][0]
-			working_var = self.__pattern_predictor.cluster_centers_[self.working_label][1]
-			idle_mean = self.__pattern_predictor.cluster_centers_[self.idle_label][0]
-			idle_var = self.__pattern_predictor.cluster_centers_[self.idle_label][1]
 			real_power = self.power[self.__peak_indices[start_ind]:self.__peak_indices[end_ind-1]+2]
 				
 			if any(p in self.__off_regions for p in range(self.__peak_indices[start_ind],self.__peak_indices[end_ind-1]+2)):
@@ -488,12 +489,12 @@ class PatternLength:
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(rp_before_off):
-					if v > working_mean:
+					if v > working_mean-working_var:
 						start_w = self.__peak_indices[start_ind]+e
 						# print ('start_w', start_w)
 						break
 				for e, v in enumerate(rp_before_off[::-1]):
-					if v > working_mean:
+					if v > working_mean-working_var:
 						end_w = self.__peak_indices[start_ind]+len(rp_before_off)-1-e
 						# print ('end_w', end_w)
 						break 
@@ -521,11 +522,11 @@ class PatternLength:
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(rp_after_off):
-					if v > working_mean:
+					if v > working_mean-working_var:
 						start_w = self.__peak_indices[start_ind]+rp_o_e+1+e
 						break
 				for e, v in enumerate(rp_before_off[::-1]):
-					if v > working_mean:
+					if v > working_mean-working_var:
 						end_w = self.__peak_indices[start_ind]+rp_o_e+1+len(rp_before_off)-1-e
 						break 
 
@@ -550,11 +551,11 @@ class PatternLength:
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(real_power):
-					if v > working_mean:
+					if v > working_mean-working_var:
 						start_w = self.__peak_indices[start_ind]+e
 						break
 				for e, v in enumerate(real_power[::-1]):
-					if v > working_mean:
+					if v > working_mean-working_var:
 						end_w = self.__peak_indices[start_ind]+len(real_power)-1-e
 						break 
 
