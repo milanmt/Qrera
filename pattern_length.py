@@ -125,7 +125,7 @@ class PatternLength:
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
 		
 		# print ('states ->', state_attributes)
-		return labels, state_attributes
+		return labels[0:200], state_attributes
 
 	def __partition_states(self):
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
@@ -458,9 +458,9 @@ class PatternLength:
 			p_mean = np.mean([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			p_var = np.std([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			req_label = self.__pattern_predictor.predict(np.array([[p_mean, p_var]]))
-			if np.std(self.__sequence[start_ind:end_ind]) != 0:
-				print (self.__sequence[start_ind:end_ind])
-				print (final_label, req_label)
+			# if np.std(self.__sequence[start_ind:end_ind]) != 0:
+			print (self.__sequence[start_ind:end_ind])
+				# print (final_label, req_label)
 
 			### Increasing resolution
 			real_power = self.power[self.__peak_indices[start_ind]:self.__peak_indices[end_ind-1]+2]
@@ -502,21 +502,32 @@ class PatternLength:
 				if start_w != None and end_w != None:
 					if start_w != self.__peak_indices[start_ind]:
 						pattern_sequence.append(self.idle_label)
-						pattern_sequence_indices.append(start_w-1)						
+						# print (self.idle_label)
+						pattern_sequence_indices.append(start_w-1)	
+						# print (start_w-1)					
 					pattern_sequence.append(req_label[0])
+					# print (req_label[0])
 					pattern_sequence_indices.append(end_w+1)
+					# print (end_w+1)
 					if end_w != start_o-1:
 						pattern_sequence.append(self.idle_label)
+						# print (self.idle_label)
 						pattern_sequence_indices.append(start_o)
+						# print (start_o)
 				else:
-					pattern_sequence.append(req_label[0])
+					pattern_sequence.append(self.idle_label)
+					# print (self.idle_label)
 					if end_ind <= len(self.power):
 						pattern_sequence_indices.append(start_o)
+						# print (start_o)
 					else:
 						pattern_sequence_indices.append(len(self.power)-1)
+						# print (len(self.power)-1)
 
 				pattern_sequence.append(2)
+				# print (2)
 				pattern_sequence_indices.append(end_o)
+				# print (end_o)
 
 				rp_after_off = real_power[rp_o_e+1:]
 				start_w = None
@@ -525,26 +536,35 @@ class PatternLength:
 					if v > working_mean-working_var:
 						start_w = self.__peak_indices[start_ind]+rp_o_e+1+e
 						break
-				for e, v in enumerate(rp_before_off[::-1]):
+				for e, v in enumerate(rp_after_off[::-1]):
 					if v > working_mean-working_var:
-						end_w = self.__peak_indices[start_ind]+rp_o_e+1+len(rp_before_off)-1-e
+						end_w = self.__peak_indices[start_ind]+rp_o_e+1+len(rp_after_off)-1-e
 						break 
 
 				if start_w != None and end_w != None:
 					if start_w != self.__peak_indices[start_ind]+rp_o_e+1:
 						pattern_sequence.append(self.idle_label)
+						# print (self.idle_label)
 						pattern_sequence_indices.append(start_w-1)
+						# print (start_w-1)
 					pattern_sequence.append(3)
+					# print (3)
 					pattern_sequence_indices.append(end_w+1)
-					if end_w != self.__peak_indices[end_ind-1]-1:
+					# print (end_w+1)
+					if end_w != self.__peak_indices[end_ind-1]+1:
 						pattern_sequence.append(self.idle_label)
+						# print (self.idle_label)
 						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
+						# print (self.__peak_indices[end_ind-1]+1)
 
 				else:
-					pattern_sequence.append(req_label[0])
+					pattern_sequence.append(self.idle_label)
+					# print (self.idle_label)
 					if end_ind <= len(self.power):
+						# print(self.__peak_indices[end_ind-1]+1)
 						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
 					else:
+						# print(len(self.power)-1)
 						pattern_sequence_indices.append(len(self.power)-1)
 
 			else:
@@ -561,20 +581,29 @@ class PatternLength:
 
 				if start_w != None and end_w != None:
 					if start_w != self.__peak_indices[start_ind]:
+						# print (self.idle_label)
 						pattern_sequence.append(self.idle_label)
+						# print (start_w-1)
 						pattern_sequence_indices.append(start_w-1)						
 					pattern_sequence.append(req_label[0])
+					# print (req_label[0])
 					pattern_sequence_indices.append(end_w+1)
-					if end_w != self.__peak_indices[end_ind-1]-1:
+					# print (end_w+1)
+					if end_w != self.__peak_indices[end_ind-1]+1:
 						pattern_sequence.append(self.idle_label)
+						# print (self.idle_label)
 						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
+						# print (self.__peak_indices[end_ind-1]+1)
 
 				else:
 					pattern_sequence.append(req_label[0])
+					# print (req_label[0])
 					if end_ind <= len(self.__sequence):
 						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
+						# print (self.__peak_indices[end_ind-1]+1)
 					else:
 						pattern_sequence_indices.append(len(self.power)-1)
+						# print (len(self.power)-1)
 		
 			start_ind = end_ind-1
 		
