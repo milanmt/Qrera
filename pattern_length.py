@@ -125,7 +125,7 @@ class PatternLength:
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
 		
 		# print ('states ->', state_attributes)
-		return labels[0:200], state_attributes
+		return labels, state_attributes
 
 	def __partition_states(self):
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
@@ -331,10 +331,10 @@ class PatternLength:
 		pattern_sequence = []
 		pattern_sequence_indices = []
 
-		working_mean = self.__pattern_predictor.cluster_centers_[self.working_label][0]
-		working_var = self.__pattern_predictor.cluster_centers_[self.working_label][1]
-		idle_mean = self.__pattern_predictor.cluster_centers_[self.idle_label][0]
-		idle_var = self.__pattern_predictor.cluster_centers_[self.idle_label][1]
+		self.working_mean = self.__pattern_predictor.cluster_centers_[self.working_label][0]
+		self.working_var = self.__pattern_predictor.cluster_centers_[self.working_label][1]
+		self.idle_mean = self.__pattern_predictor.cluster_centers_[self.idle_label][0]
+		self.idle_var = self.__pattern_predictor.cluster_centers_[self.idle_label][1]
 
 		idle_states = []
 		for pt,freq in self.__pattern_dict[self.idle_label]:
@@ -458,9 +458,9 @@ class PatternLength:
 			p_mean = np.mean([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			p_var = np.std([self.__state_attributes[str(s)][0] for s in self.__sequence[start_ind:end_ind]])
 			req_label = self.__pattern_predictor.predict(np.array([[p_mean, p_var]]))
-			# if np.std(self.__sequence[start_ind:end_ind]) != 0:
-			print (self.__sequence[start_ind:end_ind])
-				# print (final_label, req_label)
+			if np.std(self.__sequence[start_ind:end_ind]) != 0:
+				print (self.__sequence[start_ind:end_ind])
+				print (final_label, req_label)
 
 			### Increasing resolution
 			real_power = self.power[self.__peak_indices[start_ind]:self.__peak_indices[end_ind-1]+2]
@@ -489,12 +489,12 @@ class PatternLength:
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(rp_before_off):
-					if v > working_mean-working_var:
+					if v > self.working_mean-self.working_var:
 						start_w = self.__peak_indices[start_ind]+e
 						# print ('start_w', start_w)
 						break
 				for e, v in enumerate(rp_before_off[::-1]):
-					if v > working_mean-working_var:
+					if v > self.working_mean-self.working_var:
 						end_w = self.__peak_indices[start_ind]+len(rp_before_off)-1-e
 						# print ('end_w', end_w)
 						break 
@@ -533,11 +533,11 @@ class PatternLength:
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(rp_after_off):
-					if v > working_mean-working_var:
+					if v > self.working_mean-self.working_var:
 						start_w = self.__peak_indices[start_ind]+rp_o_e+1+e
 						break
 				for e, v in enumerate(rp_after_off[::-1]):
-					if v > working_mean-working_var:
+					if v > self.working_mean-self.working_var:
 						end_w = self.__peak_indices[start_ind]+rp_o_e+1+len(rp_after_off)-1-e
 						break 
 
@@ -571,11 +571,11 @@ class PatternLength:
 				start_w = None
 				end_w = None 
 				for e, v in enumerate(real_power):
-					if v > working_mean-working_var:
+					if v > self.working_mean-self.working_var:
 						start_w = self.__peak_indices[start_ind]+e
 						break
 				for e, v in enumerate(real_power[::-1]):
-					if v > working_mean-working_var:
+					if v > self.working_mean-self.working_var:
 						end_w = self.__peak_indices[start_ind]+len(real_power)-1-e
 						break 
 
@@ -635,7 +635,7 @@ class PatternLength:
 		print ('Getting Average Cycle Time...')
 		unique_labels, counts = np.unique(self.p_array, return_counts=True)
 
-		print ('Mapping time indices...')
+		print ('Mapping time indices...')  ## This is not needed for average length
 		simplified_seq = np.zeros((len(self.power)))
 		start_ind = 0
 		for e,i in enumerate(self.p_indices):
@@ -691,3 +691,10 @@ class PatternLength:
 		estimate_count = counts[working_ind]
 		print ('No. of working patterns found : ' , estimate_count)
 		return estimate_count
+
+	
+	def segment_signal(self):
+
+
+
+	# def get_average_idle_loading_time(self):
