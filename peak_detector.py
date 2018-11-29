@@ -1,23 +1,23 @@
 #! /usr/bin/env python3
 
-from scipy.signal import find_peaks, butter, filtfilt
+from scipy.signal import find_peaks, butter, filtfilt, savgol_filter
 from sklearn.mixture import BayesianGaussianMixture
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import pattern_discovery
 import pandas as pd 
-import numpy as np 
-import time
+import numpy as np
+import time 
 import os
 
 N_MAX = 10
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
-		t0= time.time()
+		t = datetime.now()
 		func_val = func(*args,**kwargs)
-		time_taken = time.time() - t0
-		print (str(func),' took: ', time_taken)
+		time_taken = datetime.now() -t
+		print (str(func),'Took: ', time_taken)
 		return func_val
 	return wrapper
 
@@ -39,13 +39,15 @@ def get_required_files(device_path, day):
 	return file1, file2
 
 def lpf(data):
-	if len(data) < 13:
-		data.extend((13-len(data))*[data[-1]])
+	# if len(data) < 13:
+	# 	data.extend((13-len(data))*[data[-1]])
 
-	b, a = butter(3, 0.5)
-	y = filtfilt(b, a, data)
+	# b, a = butter(3, 0.5)
+	# y = filtfilt(b, a, data)
+
+	y = savgol_filter(data, 5,2,mode='nearest')
 	
-	return y
+	return y 
 
 @timing_wrapper
 def preprocess_power(f1, f2):
@@ -54,7 +56,7 @@ def preprocess_power(f1, f2):
 	if f2 == None:
 		df = pd.read_csv(f1)
 		df.sort_values(by='TS')
-		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
+		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:30:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
 		end_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 11:59:59', '%Y_%m_%d %H:%M:%S'), sep=' ')
 	else:
 		df1 = pd.read_csv(f1)
@@ -62,7 +64,7 @@ def preprocess_power(f1, f2):
 		df1.sort_values(by='TS')
 		df2.sort_values(by='TS')
 		df = pd.concat([df1,df2])
-		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
+		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 08:30:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
 		end_time = datetime.isoformat(timedelta(days=1) + datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S'), sep=' ')
 
 	df = df[(df['TS'] >= start_time) & (df['TS'] < end_time)]
@@ -102,7 +104,7 @@ def filter_signal(power):
 	min_power = np.min(power_f)
 	if min_power < 0:
 		power_f = power_f + abs(min_power)
-	return power_f
+	return power
 
 def piecewise_approximation(power, WINDOW):
 	print ('Finding piece wise approcimation of signal....')
@@ -153,7 +155,7 @@ def signal_to_discrete_states(final_peaks):
 	# print (dpgmm.means_)
 	# print (dpgmm.covariances_)
 
-	color=['navy', 'c', 'cornflowerblue', 'gold','darkorange', 'r', 'g', 'm', 'y', 'k']
+	color=['navy', 'cornflowerblue', 'gold', 'c', 'darkorange', 'r', 'g', 'm', 'y', 'k', 'teal', 'chocolate', 'crimson', 'dimgray', 'purple']
 	
 	color_labels = []
 	for label in labels:
