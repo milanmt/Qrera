@@ -80,8 +80,10 @@ class PatternLength:
 				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
 		
 		### Filtering
-		# power_f = savgol_filter(self.power, 5,2,mode='nearest')
-		power_f = self.power   ## No filtering
+		if self.order == 1:
+			power_f = savgol_filter(self.power, 5,2,mode='nearest')
+		else:
+			power_f = self.power   ## No filtering
 
 		### Detecting Peaks
 		peak_indices_list = []
@@ -125,7 +127,7 @@ class PatternLength:
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
 		
 		# print ('states ->', state_attributes)
-		return labels, state_attributes
+		return labels[:], state_attributes
 
 	def __partition_states(self):
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
@@ -693,8 +695,96 @@ class PatternLength:
 		return estimate_count
 
 	
-	def segment_signal(self):
+	def __get_load_signals(self):
+		idle_pf =  self.__pattern_dict[self.idle_label]
+		if len(idle_pf) == 1:
+			req_idle = idle_pf	
+			self.__idle_predictor = None
+			self.load_label = self.idle_label
+
+		else:
+			### Getting average variances and means of idles for classification
+			cluster_mv = np.zeros((len(idle_pf),2))
+			for e, seq in enumerate(idle_pf):
+				var = np.std([self.__state_attributes[str(s)][0] for s in seq[0]])
+				avg = np.mean([self.__state_attributes[str(s)][0] for s in seq[0]])
+				cluster_mv[e][1] = var
+				cluster_mv[e][0] = avg
+			# print (cluster_mv, 'cluster_mv')
+
+			### KMeans 
+			kmeans_i = KMeans(2, random_state=7).fit(cluster_mv)
+			self.__idle_predictor = kmeans_i
+			cl_mv_labels = kmeans_i.labels_
+			cl_mean = [el[0] for el in kmeans_i.cluster_centers_]
+			self.off_label = cl_mean.index(min(cl_mean))
+			self.load_label = 1 - self.off_label
+
+			idle_clusters = dict()
+			for e,label in enumerate(cl_mv_labels):
+				if label not in idle_clusters:
+					idle_clusters.update({label : list(idle_pf[e])})
+				else: 
+					idle_clusters[label].extend(idle_pf[e])
+			print (idle_clusters)
+
+			req_idle = idle_clusters[self.load_label]
+
+		print (req_idle)
+		return req_idle
+		
+		
+	def get_average_uloading_time(self):
+		uload_patterns = self.__get_load_signals()
+		if self.__idle_predictor != None:
+			segmented_signal, end_points = self.__segment_with_uload()
+
+		else:
+			segmented_signal, end_points = self.__segment_signal(self.p_array)
+			
+		ul = []
+		for e,p in enumerate(segmented_signal):
+			if p == self.load_label:
+				if e == 0:
+					ul.append(end_points[e])
+				else:
+					ul.append(end_points[e] - end_points[e-1] +1)
+		avg_ul_time = np.mean(ul)
+		max_ul_time = max(ul)
+		min_ul_time = min(ul)
+		print ('Avg Loading Unloading Time', avg_ul_time)
+		print ('Max Loading Unloading Time', max_ul_time)
+		print ('Min Loading Unloading Time', min_ul_time)
+		return avg_ul_time
 
 
+	def __segment_with_uload(self):
+		p_array_w_uload = self.p_array
+		for i,p in enumerate(self.p_array):
+			if p == self.idle_label:
+				if i == 0:
+					real_idle = self.power[:self.p_indices[i]+1]
+				else:
+					real_idle = self.power[self.p_indices[i-1]:self.p_indices[i]+1]
+				ri_m = np.mean(real_idle)
+				ri_v = np.std(real_idle)
+				l_id = self.__idle_predictor.predict(np.array([[ri_m, ri_v]]))
+				if l_id == self.load_label:
+					p_array_w_uload[i] = 3  # 0,1, 2- off, 3-uload 
 
-	# def get_average_idle_loading_time(self):
+		segmented_signal, end_points = self.__segment_signal(p_array_w_uload)
+		return segmented_signal, end_points
+
+	def __segment_signal(self, pattern_array):
+		sig = np.array(pattern_array)
+		change_points = np.where(sig[:-1] != sig[1:])[0]
+		segmented_signal = []
+		end_points = []
+		for e, cp in enumerate(change_points):
+			segmented_signal.append(sig[int(cp)])
+			end_points.append(self.p_indices[int(cp)])
+			if e == len(change_points)-1:
+				segmented_signal.append(sig[int(cp)+1])
+				end_points.append(self.p_indices[int(cp)+1])
+
+		return segmented_signal, end_points
