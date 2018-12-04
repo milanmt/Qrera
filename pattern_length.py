@@ -634,17 +634,8 @@ class PatternLength:
 		return False
  
 	def get_average_cycle_time(self):
-		print ('Getting Average Cycle Time...')
-		unique_labels, counts = np.unique(self.p_array, return_counts=True)
-
-		print ('Mapping time indices...')  ## This is not needed for average length
-		simplified_seq = np.zeros((len(self.power)))
-		start_ind = 0
-		for e,i in enumerate(self.p_indices):
-			simplified_seq[start_ind:i+1] = self.p_array[e]
-			start_ind = i+1
-		simplified_seq[self.__off_regions] = 2
-
+		print ('Getting Average Cycle Time...') 
+		
 		p_l = 0
 		count_avg = 0
 		for e,p in enumerate(self.p_array):
@@ -664,6 +655,14 @@ class PatternLength:
 
 		cycle_time = p_l/count_avg
 		print ('Avg cycle time ->', cycle_time)
+
+		print ('Mapping time indices...')  ## This is not needed for average length
+		simplified_seq = np.zeros((len(self.power)))
+		start_ind = 0
+		for e,i in enumerate(self.p_indices):
+			simplified_seq[start_ind:i+1] = self.p_array[e]
+			start_ind = i+1
+		simplified_seq[self.__off_regions] = 2
 
 		print ('Plotting...')
 		unique_labels = list(np.unique(simplified_seq))
@@ -755,6 +754,7 @@ class PatternLength:
 		print ('Avg Loading Unloading Time', avg_ul_time)
 		print ('Max Loading Unloading Time', max_ul_time)
 		print ('Min Loading Unloading Time', min_ul_time)
+
 		return avg_ul_time
 
 
@@ -770,7 +770,36 @@ class PatternLength:
 				ri_v = np.std(real_idle)
 				l_id = self.__idle_predictor.predict(np.array([[ri_m, ri_v]]))
 				if l_id == self.load_label:
-					p_array_w_uload[i] = 3  # 0,1, 2- off, 3-uload 
+					p_array_w_uload[i] = 4  # 0,1, 2- off, 3-ambiguous, 4-uload
+
+		print ('Mapping time indices...')  ## This is not needed for average length
+		simplified_seq = np.zeros((len(self.power)))
+		start_ind = 0
+		for e,i in enumerate(self.p_indices):
+			simplified_seq[start_ind:i+1] = p_array_w_uload[e]
+			start_ind = i+1
+		simplified_seq[self.__off_regions] = 2
+
+		print ('Plotting...')
+		unique_labels = list(np.unique(simplified_seq))
+		y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
+		for e,el in enumerate(simplified_seq):
+			# print (e,el)
+			if el == 2:
+				y_plot[unique_labels.index(el),e] = 1500
+			else:
+				y_plot[int(el),e] = self.power[e]
+		time = np.arange(len(self.power))
+	
+		plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
+		data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
+		pattern_edges = len(time)*[None]
+		for ind in self.p_indices:
+			pattern_edges[ind] = self.power[ind]
+		# print (len([l for l in pattern_edges if l != None]))
+		data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
+		fig = go.Figure(data = data)
+		plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
 
 		segmented_signal, end_points = self.__segment_signal(p_array_w_uload)
 		return segmented_signal, end_points
