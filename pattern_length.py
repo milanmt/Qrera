@@ -672,7 +672,7 @@ class PatternLength:
 			if el == 2:
 				y_plot[unique_labels.index(el),e] = 1500
 			else:
-				y_plot[int(el),e] = self.power[e]
+				y_plot[unique_labels.index(el),e] = self.power[e]
 		time = np.arange(len(self.power))
 	
 		plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
@@ -739,15 +739,51 @@ class PatternLength:
 			segmented_signal, end_points = self.__segment_with_uload()
 
 		else:
+			print ('Mapping time indices...')  ## This is not needed for average length
+			simplified_seq = np.zeros((len(self.power)))
+			start_ind = 0
+			for e,i in enumerate(self.p_indices):
+				simplified_seq[start_ind:i+1] = self.p_array[e]
+				start_ind = i+1
+			simplified_seq[self.__off_regions] = 2
+
+			print ('Plotting...')
+			unique_labels = list(np.unique(simplified_seq))
+			y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
+			for e,el in enumerate(simplified_seq):
+				# print (e,el)
+				if el == 2:
+					y_plot[unique_labels.index(el),e] = 1500
+				else:
+					y_plot[unique_labels.index(el),e] = self.power[e]
+			time = np.arange(len(self.power))
+	
+			plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
+			data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
+			pattern_edges = len(time)*[None]
+			for ind in self.p_indices:
+				pattern_edges[ind] = self.power[ind]
+			# print (len([l for l in pattern_edges if l != None]))
+			data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
+			fig = go.Figure(data = data)
+			plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
+			
 			segmented_signal, end_points = self.__segment_signal(self.p_array)
 			
 		ul = []
 		for e,p in enumerate(segmented_signal):
 			if p == self.load_label:
 				if e == 0:
-					ul.append(end_points[e])
+					if all(point not in range(0,end_points[e]+1) for point in self.__off_regions):
+						ul.append(end_points[e])
+
+				elif e == len(segmented_signal)-1:
+					if all(point not in range(end_points[e-1],end_points[e]+1) for point in self.__off_regions):
+						ul.append(end_points[e] - end_points[e-1] +1)
 				else:
-					ul.append(end_points[e] - end_points[e-1] +1)
+					if segmented_signal[e-1]!= 2 and segmented_signal[e+1] !=2:
+						ul.append(end_points[e] - end_points[e-1] +1)
+
 		avg_ul_time = np.mean(ul)
 		max_ul_time = max(ul)
 		min_ul_time = min(ul)
@@ -788,7 +824,7 @@ class PatternLength:
 			if el == 2:
 				y_plot[unique_labels.index(el),e] = 1500
 			else:
-				y_plot[int(el),e] = self.power[e]
+				y_plot[unique_labels.index(el),e] = self.power[e]
 		time = np.arange(len(self.power))
 	
 		plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
