@@ -1,8 +1,8 @@
 #! /usr/bin/env python3
 
+from scipy.signal import find_peaks, savgol_filter, butter, filtfilt
 from sklearn.cluster import AffinityPropagation, KMeans
 from sklearn.mixture import BayesianGaussianMixture
-from scipy.signal import find_peaks, savgol_filter
 from dtw import dtw
 import pandas as pd
 import numpy as np
@@ -81,7 +81,16 @@ class PatternLength:
 		
 		### Filtering
 		if self.order == 1:
-			power_f = savgol_filter(self.power, 5,2,mode='nearest')
+			# power_f = savgol_filter(self.power, 5,2,mode='nearest')
+			### butterworth
+			a,b = butter(3, 0.5)
+			power_nf = filtfilt(a, b, self.power)
+			min_power_nf
+			if min_power_nf < 0:  
+				power_f = power_nf + abs(min_power_nf)
+			else:
+				power_f = power_nf
+
 		else:
 			power_f = self.power   ## No filtering
 
@@ -290,11 +299,12 @@ class PatternLength:
 				cluster_seqs[label].extend(cluster_subseqs[e])
 		
 		for label in cluster_seqs:
-			possible_patterns = cluster_seqs[label]
-			for seq in possible_patterns:
-				for subseq in possible_patterns:
-					if seq != subseq and self.__seq_contains(seq[0],subseq[0]):
-						del possible_patterns[possible_patterns.index(subseq)]
+			if label == self.working_label:
+				possible_patterns = cluster_seqs[label]
+				for seq in possible_patterns:
+					for subseq in possible_patterns:
+						if seq != subseq and self.__seq_contains(seq[0],subseq[0]):
+							del possible_patterns[possible_patterns.index(subseq)]
 
 		### Printing values
 		print ('Final Number of Clusters: ', len(cluster_seqs))
@@ -703,16 +713,23 @@ class PatternLength:
 
 		else:
 			### Getting average variances and means of idles for classification
-			cluster_mv = np.zeros((len(idle_pf),2))
+			cluster_mv = np.zeros((len(idle_pf),1))
 			for e, seq in enumerate(idle_pf):
-				var = np.std([self.__state_attributes[str(s)][0] for s in seq[0]])
+				# var = np.std([self.__state_attributes[str(s)][0] for s in seq[0]])
 				avg = np.mean([self.__state_attributes[str(s)][0] for s in seq[0]])
-				cluster_mv[e][1] = var
+				# cluster_mv[e][1] = var
+				print (seq, avg)
 				cluster_mv[e][0] = avg
 			# print (cluster_mv, 'cluster_mv')
 
+			seq_fs = [seq for seq in idle_pf]
+			seq_fs.sort(key=lambda x: x[1])
+			print (seq_fs)
+			c1 = np.mean([self.__state_attributes[str(s)][0] for s in seq_fs[-1][0]])
+			c2 = np.mean([self.__state_attributes[str(s)][0] for s in seq_fs[-2][0]])
+			
 			### KMeans 
-			kmeans_i = KMeans(2, random_state=7).fit(cluster_mv)
+			kmeans_i = KMeans(2, init=np.array([[c1], [c2]]), random_state=7).fit(cluster_mv)
 			self.__idle_predictor = kmeans_i
 			cl_mv_labels = kmeans_i.labels_
 			cl_mean = [el[0] for el in kmeans_i.cluster_centers_]
@@ -803,8 +820,8 @@ class PatternLength:
 				else:
 					real_idle = self.power[self.p_indices[i-1]:self.p_indices[i]+1]
 				ri_m = np.mean(real_idle)
-				ri_v = np.std(real_idle)
-				l_id = self.__idle_predictor.predict(np.array([[ri_m, ri_v]]))
+				# ri_v = np.std(real_idle)
+				l_id = self.__idle_predictor.predict(np.array([[ri_m]]))
 				if l_id == self.load_label:
 					p_array_w_uload[i] = 4  # 0,1, 2- off, 3-ambiguous, 4-uload
 
