@@ -26,8 +26,9 @@ class SinglePatternError(Exception):
 	pass
 
 class PatternLength:
-	def __init__(self, raw_dataframe, min_len, max_len, order, n_states=10):
+	def __init__(self, raw_dataframe, total_time, min_len, max_len, order, n_states=10):
 		##### Parameters to be set 
+		self.total_time = total_time
 		self.min_len = min_len
 		self.max_len = max_len
 		if self.max_len <= self.min_len:
@@ -55,7 +56,7 @@ class PatternLength:
 		### Preprocessing
 		df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
 		# print (df.shape[0], 'orig_signal length')
-		self.power = np.zeros((86400))
+		self.power = np.zeros((self.total_time))
 		self.power[0] = df.iloc[0,0]
 		offset = int(df.iloc[0,1])
 		t = offset
@@ -703,7 +704,6 @@ class PatternLength:
 		print ('No. of working patterns found : ' , estimate_count)
 		return estimate_count
 
-	
 	def __get_load_signals(self):
 		idle_pf =  self.__pattern_dict[self.idle_label]
 		if len(idle_pf) == 1:
@@ -755,6 +755,20 @@ class PatternLength:
 		if self.__idle_predictor != None:
 			segmented_signal, end_points = self.__segment_with_uload()
 
+			ul = []
+			for e,p in enumerate(segmented_signal):
+				if p == 4:  ## 4 is the uloadlabel
+					if e == 0:
+						if all(point not in range(0,end_points[e]+1) for point in self.__off_regions):
+							ul.append(end_points[e])
+
+					elif e == len(segmented_signal)-1:
+						if all(point not in range(end_points[e-1],end_points[e]+1) for point in self.__off_regions):
+							ul.append(end_points[e] - end_points[e-1] +1)
+					else:
+						if segmented_signal[e-1]!= 2 and segmented_signal[e+1] !=2:
+							ul.append(end_points[e] - end_points[e-1] +1)
+
 		else:
 			print ('Mapping time indices...')  ## This is not needed for average length
 			simplified_seq = np.zeros((len(self.power)))
@@ -787,19 +801,19 @@ class PatternLength:
 			
 			segmented_signal, end_points = self.__segment_signal(self.p_array)
 			
-		ul = []
-		for e,p in enumerate(segmented_signal):
-			if p == self.load_label:
-				if e == 0:
-					if all(point not in range(0,end_points[e]+1) for point in self.__off_regions):
-						ul.append(end_points[e])
+			ul = []
+			for e,p in enumerate(segmented_signal):
+				if p == self.idle_label:  ## 4 is the uloadlabel
+					if e == 0:
+						if all(point not in range(0,end_points[e]+1) for point in self.__off_regions):
+							ul.append(end_points[e])
 
-				elif e == len(segmented_signal)-1:
-					if all(point not in range(end_points[e-1],end_points[e]+1) for point in self.__off_regions):
-						ul.append(end_points[e] - end_points[e-1] +1)
-				else:
-					if segmented_signal[e-1]!= 2 and segmented_signal[e+1] !=2:
-						ul.append(end_points[e] - end_points[e-1] +1)
+					elif e == len(segmented_signal)-1:
+						if all(point not in range(end_points[e-1],end_points[e]+1) for point in self.__off_regions):
+							ul.append(end_points[e] - end_points[e-1] +1)
+					else:
+						if segmented_signal[e-1]!= 2 and segmented_signal[e+1] !=2:
+							ul.append(end_points[e] - end_points[e-1] +1)
 
 		avg_ul_time = np.mean(ul)
 		max_ul_time = max(ul)
