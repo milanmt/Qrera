@@ -709,8 +709,7 @@ class PatternLength:
 		if len(idle_pf) == 1:
 			req_idle = idle_pf	
 			self.__idle_predictor = None
-			self.load_label = self.idle_label
-
+	
 		else:
 			### Getting average variances and means of idles for classification
 			cluster_mv = np.zeros((len(idle_pf),1))
@@ -718,7 +717,6 @@ class PatternLength:
 				# var = np.std([self.__state_attributes[str(s)][0] for s in seq[0]])
 				avg = np.mean([self.__state_attributes[str(s)][0] for s in seq[0]])
 				# cluster_mv[e][1] = var
-				print (seq, avg)
 				cluster_mv[e][0] = avg
 			# print (cluster_mv, 'cluster_mv')
 
@@ -739,9 +737,9 @@ class PatternLength:
 			idle_clusters = dict()
 			for e,label in enumerate(cl_mv_labels):
 				if label not in idle_clusters:
-					idle_clusters.update({label : list(idle_pf[e])})
+					idle_clusters.update({label : [idle_pf[e]]})
 				else: 
-					idle_clusters[label].extend(idle_pf[e])
+					idle_clusters[label].append(idle_pf[e])
 			print (idle_clusters)
 
 			req_idle = idle_clusters[self.load_label]
@@ -752,10 +750,10 @@ class PatternLength:
 		
 	def get_average_uloading_time(self):
 		uload_patterns = self.__get_load_signals()
-		if self.__idle_predictor != None:
-			segmented_signal, end_points = self.__segment_with_uload()
-
-			ul = []
+		segmented_signal, end_points, uload_present = self.__segment_with_uload()
+	
+		ul = []
+		if uload_present:
 			for e,p in enumerate(segmented_signal):
 				if p == 4:  ## 4 is the uloadlabel
 					if e == 0:
@@ -770,40 +768,8 @@ class PatternLength:
 							ul.append(end_points[e] - end_points[e-1] +1)
 
 		else:
-			print ('Mapping time indices...')  ## This is not needed for average length
-			simplified_seq = np.zeros((len(self.power)))
-			start_ind = 0
-			for e,i in enumerate(self.p_indices):
-				simplified_seq[start_ind:i+1] = self.p_array[e]
-				start_ind = i+1
-			simplified_seq[self.__off_regions] = 2
-
-			print ('Plotting...')
-			unique_labels = list(np.unique(simplified_seq))
-			y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
-			for e,el in enumerate(simplified_seq):
-				# print (e,el)
-				if el == 2:
-					y_plot[unique_labels.index(el),e] = 1500
-				else:
-					y_plot[unique_labels.index(el),e] = self.power[e]
-			time = np.arange(len(self.power))
-	
-			plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
-			data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
-			pattern_edges = len(time)*[None]
-			for ind in self.p_indices:
-				pattern_edges[ind] = self.power[ind]
-			# print (len([l for l in pattern_edges if l != None]))
-			data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
-			fig = go.Figure(data = data)
-			plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
-			
-			segmented_signal, end_points = self.__segment_signal(self.p_array)
-			
-			ul = []
 			for e,p in enumerate(segmented_signal):
-				if p == self.idle_label:  ## 4 is the uloadlabel
+				if p == self.idle_label:  ## when no uload, only idle
 					if e == 0:
 						if all(point not in range(0,end_points[e]+1) for point in self.__off_regions):
 							ul.append(end_points[e])
@@ -827,17 +793,28 @@ class PatternLength:
 
 	def __segment_with_uload(self):
 		p_array_w_uload = self.p_array
+		if self.__idle_predictor != None:
+			uload_present = True
+		else:
+			uload_present = False
+
 		for i,p in enumerate(self.p_array):
 			if p == self.idle_label:
 				if i == 0:
 					real_idle = self.power[:self.p_indices[i]+1]
 				else:
 					real_idle = self.power[self.p_indices[i-1]:self.p_indices[i]+1]
+				
 				ri_m = np.mean(real_idle)
 				# ri_v = np.std(real_idle)
-				l_id = self.__idle_predictor.predict(np.array([[ri_m]]))
-				if l_id == self.load_label:
-					p_array_w_uload[i] = 4  # 0,1, 2- off, 3-ambiguous, 4-uload
+				if self.__idle_predictor != None:
+					l_id = self.__idle_predictor.predict(np.array([[ri_m]]))
+					if l_id == self.load_label:
+						p_array_w_uload[i] = 4  # 0,1, 2- off, 3-ambiguous, 4-uload
+				else:
+					if ri_m > self.idle_mean - self.idle_var:
+						uload_present = True
+						p_array_w_uload[i] = 4
 
 		print ('Mapping time indices...')  ## This is not needed for average length
 		simplified_seq = np.zeros((len(self.power)))
@@ -869,7 +846,8 @@ class PatternLength:
 		plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
 
 		segmented_signal, end_points = self.__segment_signal(p_array_w_uload)
-		return segmented_signal, end_points
+		
+		return segmented_signal, end_points, uload_present
 
 	def __segment_signal(self, pattern_array):
 		sig = np.array(pattern_array)
@@ -882,5 +860,5 @@ class PatternLength:
 			if e == len(change_points)-1:
 				segmented_signal.append(sig[int(cp)+1])
 				end_points.append(self.p_indices[int(cp)+1])
-
+		
 		return segmented_signal, end_points
