@@ -20,7 +20,7 @@ def initial_processing(f1,f2):
 		df = pandas.read_csv(f1)
 		df.sort_values(by='TS')
 		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 07:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
-		end_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 11:59:59', '%Y_%m_%d %H:%M:%S'), sep=' ')
+		end_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 23:59:59', '%Y_%m_%d %H:%M:%S'), sep=' ')
 	else:
 		df1 = pandas.read_csv(f1)
 		df2 = pandas.read_csv(f2)
@@ -29,7 +29,7 @@ def initial_processing(f1,f2):
 		df = pandas.concat([df1,df2])
 		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 07:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
 		end_time = datetime.isoformat(timedelta(days=1) + datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S'), sep=' ')
-
+	
 	df = df[(df['TS'] >= start_time) & (df['TS'] < end_time)]
 	df = df.drop_duplicates(subset=['TS'], keep='first')
 	return df
@@ -60,8 +60,8 @@ if __name__ == '__main__':
 	# day = '2018_07_07'
 
 	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D388561'
+	# day = '2018_11_02'
 	day = '2018_10_15'
-	# day = '2018_10_10'
 	
 	# device_path = '/media/milan/DATA/Qrera/AutoAcc/39FFBE'
 	# day = '2018_04_27' #'2017_12_09'
@@ -79,9 +79,10 @@ if __name__ == '__main__':
 
 ################# using pattern_length
 	power_df = initial_processing(file1, file2)
-	pl = pattern_length.PatternLength(power_df, 5, 30, 3)
-	cycle_time = pl.get_average_cycle_time()
-	estimate_count = pl.get_estimate_count()
+	pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
+	# cycle_time = pl.get_average_cycle_time()
+	# estimate_count = pl.get_estimate_count()
+	uload_time = pl.get_average_uloading_time()
 
 ################# using signal segmentation class
 	# power = pd.preprocess_power(file1, file2)
