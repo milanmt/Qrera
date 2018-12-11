@@ -3,20 +3,19 @@
 from scipy.signal import find_peaks, savgol_filter, butter, filtfilt
 from sklearn.cluster import AffinityPropagation, KMeans
 from sklearn.mixture import BayesianGaussianMixture
+from datetime import datetime
 from dtw import dtw
 import pandas as pd
 import numpy as np
-import datetime
-import time
 import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 import plotly
 
 def timing_wrapper(func):
 	def wrapper(*args,**kwargs):
-		t = datetime.datetime.now()
+		t = datetime.now()
 		func_val = func(*args,**kwargs)
-		time_taken = datetime.datetime.now() -t
+		time_taken = datetime.now() -t
 		print (str(func),' took: ', time_taken)
 		return func_val
 	return wrapper
@@ -54,31 +53,31 @@ class PatternLength:
 	def __preprocess_power(self, df):
 		print ('Preprocessing power...')
 		### Preprocessing
-		df['TS'] = df['TS'].apply(lambda x: int(time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S'))))
+		df['TS'] = df['TS'].apply(lambda x: int(datetime.timestamp(datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))))
 		# print (df.shape[0], 'orig_signal length')
 		self.power = np.zeros((self.total_time))
 		self.power[0] = df.iloc[0,0]
-		offset = int(df.iloc[0,1])
-		t = offset
+		self.offset = int(df.iloc[0,1])
+		t = self.offset
 		for i in range(1,df.shape[0]):
 			if int(df.iloc[i,1]) != t:
 				if round(df.iloc[i,1]-t) == 1.0:
-					self.power[t+1-offset] = df.iloc[i,0]
+					self.power[t+1-self.offset] = df.iloc[i,0]
 					t+=1			
 				elif int(df.iloc[i,1])-t < 11.0:
 					orig_t = t
-					req_offset = orig_t+1-offset
+					req_offset = orig_t+1-self.offset
 					for j in range(int(df.iloc[i,1]-orig_t)):
 						self.power[req_offset+j] = (df.iloc[i,0]+df.iloc[i-1,0])/2
 						t+=1
 				else:
 					orig_t = t
-					req_offset = orig_t+1-offset
+					req_offset = orig_t+1-self.offset
 					for j in range(int(df.iloc[i,1]-orig_t)):
 						self.power[req_offset+j] = 0
 						t+=1
 			else: 
-				self.power[t-offset] = (self.power[t-offset]+df.iloc[i,0])/2
+				self.power[t-self.offset] = (self.power[t-self.offset]+df.iloc[i,0])/2
 		
 		### Filtering
 		if self.order == 1:
@@ -140,8 +139,9 @@ class PatternLength:
 		return labels[:], state_attributes
 
 	def __partition_states(self):
+		print (self.__state_attributes)
 		seq_means = np.array([self.__state_attributes[str(s)][0] for s in self.__sequence]).reshape(-1,1)
-		kmeans = KMeans(2).fit(seq_means)
+		kmeans = KMeans(2, random_state=2).fit(seq_means)
 		cl_centers = [cl[0] for cl in kmeans.cluster_centers_] 
 		if cl_centers[0] > cl_centers[1]:
 			max_id = 0
@@ -163,6 +163,7 @@ class PatternLength:
 		pattern_sets = dict()
 		patterns_unique = []
 		self.min_states, self.max_states = self.__partition_states()
+		print (self.min_states, self.max_states)
 		# print ('Printing unique patterns')
 		for init_ind in range(len(self.__sequence)-self.min_len):
 			if self.__sequence[init_ind] in self.min_states:
@@ -745,8 +746,7 @@ class PatternLength:
 			req_idle = idle_clusters[self.load_label]
 
 		print (req_idle)
-		return req_idle
-		
+		return req_idle	
 		
 	def get_average_uloading_time(self):
 		uload_patterns = self.__get_load_signals()
@@ -789,7 +789,6 @@ class PatternLength:
 		print ('Min Loading Unloading Time', min_ul_time)
 
 		return avg_ul_time
-
 
 	def __segment_with_uload(self):
 		p_array_w_uload = self.p_array
@@ -862,3 +861,15 @@ class PatternLength:
 				end_points.append(self.p_indices[int(cp)+1])
 		
 		return segmented_signal, end_points
+
+	def get_operator_segment(self, time_stamp):
+		print ('Obtaining Required Operator Region...')
+		req_ts =  datetime.timestamp(datetime.strptime(time_stamp, '%Y-%m-%d %H:%M:%S'))
+		segmented_signal, end_points = self.__segment_signal(self.p_array)
+		for i, boundary in enumerate(end_points):
+			if i != 0 and segmented_signal[i] != self.working_label:
+				if req_ts-self.offset >= end_points[i-1] and req_ts-self.offset <= boundary:
+					return datetime.fromtimestamp(self.offset+end_points[i-1]), datetime.fromtimestamp(self.offset+boundary)
+
+		return None, None 
+
