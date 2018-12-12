@@ -60,8 +60,9 @@ if __name__ == '__main__':
 	# day = '2018_07_07'
 
 	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D388561'
-	# day = '2018_11_02'
-	day = '2018_10_15'
+	day = '2018_11_02'
+	# day = '2018_08_30'
+	# day = '2018_10_15'
 	
 	# device_path = '/media/milan/DATA/Qrera/AutoAcc/39FFBE'
 	# day = '2018_04_27' #'2017_12_09'
@@ -82,7 +83,9 @@ if __name__ == '__main__':
 	pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
 	# cycle_time = pl.get_average_cycle_time()
 	# estimate_count = pl.get_estimate_count()
-	uload_time = pl.get_average_uloading_time()
+	# uload_time = pl.get_average_uloading_time()
+	start_time, end_time = pl.get_switch_segment('2018-11-02 12:56:55')
+	print (start_time, end_time)
 
 ################# using signal segmentation class
 	# power = pd.preprocess_power(file1, file2)

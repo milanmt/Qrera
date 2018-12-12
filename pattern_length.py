@@ -862,14 +862,26 @@ class PatternLength:
 		
 		return segmented_signal, end_points
 
-	def get_operator_segment(self, time_stamp):
+	def get_switch_segment(self, time_stamp):
 		print ('Obtaining Required Operator Region...')
 		req_ts =  datetime.timestamp(datetime.strptime(time_stamp, '%Y-%m-%d %H:%M:%S'))
 		segmented_signal, end_points = self.__segment_signal(self.p_array)
 		for i, boundary in enumerate(end_points):
-			if i != 0 and segmented_signal[i] != self.working_label:
-				if req_ts-self.offset >= end_points[i-1] and req_ts-self.offset <= boundary:
+			if i != 0 and req_ts-self.offset >= end_points[i-1] and req_ts-self.offset <= boundary:
+				if segmented_signal[i] == self.idle_label:
 					return datetime.fromtimestamp(self.offset+end_points[i-1]), datetime.fromtimestamp(self.offset+boundary)
+				else:
+					if abs(req_ts-self.offset - end_points[i-1]) < abs(req_ts-self.offset - boundary):
+						if segmented_signal[i-1] == self.idle_label and i != 1: 
+							return datetime.fromtimestamp(self.offset+end_points[i-2]), datetime.fromtimestamp(self.offset+end_points[i-1])
+						else:
+							return None, None
+					else:
+						if i+1 == len(end_points):
+							return None, None
+						elif segmented_signal[i+1] == self.idle_label:
+							return datetime.fromtimestamp(self.offset+end_points[i]), datetime.fromtimestamp(self.offset+end_points[i+1])
+						else:
+							return None, None
 
 		return None, None 
-
