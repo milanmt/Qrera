@@ -64,11 +64,12 @@ class PatternLength:
 				if round(df.iloc[i,1]-t) == 1.0:
 					self.power[t+1-self.offset] = df.iloc[i,0]
 					t+=1			
-				elif int(df.iloc[i,1])-t < 11.0:
+				elif int(df.iloc[i,1])-t < 21.0:
 					orig_t = t
 					req_offset = orig_t+1-self.offset
+					avg = (df.iloc[i,0]+df.iloc[i-1,0])/2
 					for j in range(int(df.iloc[i,1]-orig_t)):
-						self.power[req_offset+j] = (df.iloc[i,0]+df.iloc[i-1,0])/2
+						self.power[req_offset+j] = avg
 						t+=1
 				else:
 					orig_t = t
@@ -163,7 +164,7 @@ class PatternLength:
 		pattern_sets = dict()
 		patterns_unique = []
 		self.min_states, self.max_states = self.__partition_states()
-		print (self.min_states, self.max_states)
+		# print (self.min_states, self.max_states)
 		# print ('Printing unique patterns')
 		for init_ind in range(len(self.__sequence)-self.min_len):
 			if self.__sequence[init_ind] in self.min_states:
