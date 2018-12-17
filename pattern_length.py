@@ -24,6 +24,8 @@ def timing_wrapper(func):
 class SinglePatternError(Exception):
 	pass
 
+
+
 class PatternLength:
 	def __init__(self, raw_dataframe, total_time, min_len, max_len, order, n_states=10):
 		##### Parameters to be set 
@@ -711,6 +713,9 @@ class PatternLength:
 		if len(idle_pf) == 1:
 			req_idle = idle_pf	
 			self.__idle_predictor = None
+
+			print (req_idle)
+			return req_idle, None
 	
 		else:
 			### Getting average variances and means of idles for classification
@@ -745,12 +750,10 @@ class PatternLength:
 			print (idle_clusters)
 
 			req_idle = idle_clusters[self.load_label]
-
-		print (req_idle)
-		return req_idle	
+			return req_idle, idle_clusters[self.off_label]
 		
 	def get_average_uloading_time(self):
-		uload_patterns = self.__get_load_signals()
+		uload_patterns, idleoff_patterns = self.__get_load_signals()
 		segmented_signal, end_points, uload_present = self.__segment_with_uload()
 	
 		ul = []
@@ -886,3 +889,36 @@ class PatternLength:
 							return None, None
 
 		return None, None 
+
+	def get_mean_dictionary(self):
+		mean_dict = dict()
+		working_means = []
+		uload_means = []
+		idleoff_means = []
+
+		working_patterns = self.__pattern_dict[self.working_label]
+		uload_patterns, idleoff_patterns = self.__get_load_signals()		
+		
+		for seq,f in working_patterns:
+			working_means.append(np.mean([self.__state_attributes(str(s)) for s in seq]))
+		mean_dict.update({ 'Working': working_means})
+
+		if uload_patterns is not None:
+			for seq,f in self.uload_patterns:
+				uload_means.append(np.mean([self.__state_attributes(str(s) for s in seq)]))
+			mean_dict.update({'U/Load': uload_means})
+
+		if idleoff_patterns is not None:
+			for seq, f in idleoff_patterns:
+				idleoff_means = [np.mean([self.__state_attributes(str(s) for s in seq)])]
+			mean_dict.update({'Idle' : idleoff_means})
+
+		if len(mean_dict) == 3:
+			return mean_dict
+
+		else:
+			return None
+
+
+
+
