@@ -63,43 +63,21 @@ def get_classifier(training_file):
 	classifier.fit(X,Y)
 	return classifier, targets
 
-def initial_processing(f1,f2):
+def initial_processing(f1):
 	print ('Preprocessing files to extract data...')
-
-	if f2 == None:
-		df = pandas.read_csv(f1)
-		df.sort_values(by='TS')
-		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 07:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
-		end_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 23:59:59', '%Y_%m_%d %H:%M:%S'), sep=' ')
-	else:
-		df1 = pandas.read_csv(f1)
-		df2 = pandas.read_csv(f2)
-		df1.sort_values(by='TS')
-		df2.sort_values(by='TS')
-		df = pandas.concat([df1,df2])
-		start_time = datetime.isoformat(datetime.strptime(f1[-17:-7]+' 07:00:00', '%Y_%m_%d %H:%M:%S'), sep=' ')
-		end_time = datetime.isoformat(timedelta(days=1) + datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S'), sep=' ')
-	
-	df = df[(df['TS'] >= start_time) & (df['TS'] < end_time)]
+	df = pandas.read_csv(f1)
+	df.sort_values(by='TS')
 	df = df.drop_duplicates(subset=['TS'], keep='first')
 	return df
 
-def get_required_files(device_path, day):
+def get_required_file(device_path, day):
 	print ('Obtaining Required Files...')
-	file1 = None
-	file2 = None
-	end_search = False
-	for root, dirs, files in os.walk(device_path):
-		if files and not end_search:
-			files.sort()
-			for f in files:
-				if day in f and f.endswith('.csv.gz'):
-					file1 = os.path.join(root,f)
-				if file1 and os.path.join(root,f) > file1 and f.endswith('.csv.gz'):
-					file2 =  os.path.join(root,f)
-					end_search = True
-					break
-	return file1, file2
+	date_str = day.split('_')
+	file1 = device_path+'/'+date_str[0]+'/'+date_str[1]+'/'+day+'.csv.gz'
+	if os.path.isfile(file1):
+		return file1
+	else:
+		raise ValueError("File not available")
 
 
 if __name__ == '__main__':
@@ -109,8 +87,8 @@ if __name__ == '__main__':
 	day = '2018_11_02'
 
 	region_classifier, region_labels = get_classifier(training_file)
-	file1, file2 = get_required_files(device_path, day)
-	power_df = initial_processing(file1, file2)
+	file1 = get_required_file(device_path, day)
+	power_df = initial_processing(file1)
 
 	### Classification over 60 sec intervals
 	print ('Classifying signal over 60 sec intevrals...')
