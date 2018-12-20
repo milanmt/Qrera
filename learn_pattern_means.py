@@ -52,39 +52,36 @@ def get_required_files(device_path, day):
 if __name__ == '__main__':
 
 	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D388561'
-	training_file = '/media/milan/DATA/Qrera/trials/data/mean_dict.json'
+	training_file = '/media/milan/DATA/Qrera/trials/data/mean_dict_complete.json'
 
-	### One day
-	day = '2018_11_02'
-	file1, file2 = get_required_files(device_path, day)
-	power_df = initial_processing(file1, file2)
-	pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
-	mean_dict = pl.get_mean_dictionary()
-	print (mean_dict)
+	# ### One day
+	# day = '2018_11_02'
+	# file1, file2 = get_required_files(device_path, day)
+	# power_df = initial_processing(file1, file2)
+	# pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
+	# mean_dict = pl.get_mean_dictionary()
+	# print (mean_dict)
 
-	with open (training_file, 'w') as f:
-		json.dump(mean_dict,f)
-
-	print ('reading dictionary')
-	
-	print (new_dic)
+	# with open (training_file, 'w') as f:
+	# 	json.dump(mean_dict,f)
 
 	#### Over multiple days 
+	files = []
 	for root, dirs, fs in os.walk(device_path):
 		if fs:
 			files.extend(os.path.join(root,f) for f in fs if f.endswith('.csv.gz') and fnmatch.fnmatch(f,"*_*_*"))
 
-	i = 0
 	for file in files:
 		print (file[-17:-7])
-		i +=1
+		
+		file1, file2 = get_required_files(device_path, file[-17:-7])
+		power_df = initial_processing(file1, file2)
+		pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
+		
 		if os.path.isfile(training_file):
 			with open(training_file, 'r') as f:
 				mean_dict = json.load(f)
 
-			file1, file2 = get_required_files(device_path, file[-17:-7])
-			power_df = initial_processing(file1, file2)
-			pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
 			mean_dict_day = pl.get_mean_dictionary()
 			
 			if mean_dict_day != None:
@@ -92,14 +89,7 @@ if __name__ == '__main__':
 					mean_dict[region].extend(mean_dict_day[region])
 		
 		else:
-			file1, file2 = get_required_files(device_path, day)
-			power_df = initial_processing(file1, file2)
-			pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
 			mean_dict = pl.get_mean_dictionary()
-			print (mean_dict)
-
+			
 		with open(training_file, 'w') as f:
 			json.dump(mean_dict, f)
-
-		if i > 3:
-			break
