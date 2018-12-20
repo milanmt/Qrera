@@ -897,28 +897,23 @@ class PatternLength:
 		idleoff_means = []
 
 		working_patterns = self.__pattern_dict[self.working_label]
-		uload_patterns, idleoff_patterns = self.__get_load_signals()		
+		uload_patterns, idleoff_patterns = self.__get_load_signals()	
 		
 		for seq,f in working_patterns:
-			working_means.append(np.mean([self.__state_attributes(str(s)) for s in seq]))
+			working_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
 		mean_dict.update({ 'Working': working_means})
 
 		if uload_patterns is not None:
-			for seq,f in self.uload_patterns:
-				uload_means.append(np.mean([self.__state_attributes(str(s) for s in seq)]))
-			mean_dict.update({'U/Load': uload_means})
+			for seq,f in uload_patterns:
+				uload_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
+			mean_dict.update({'ULoad': uload_means})
 
 		if idleoff_patterns is not None:
 			for seq, f in idleoff_patterns:
-				idleoff_means = [np.mean([self.__state_attributes(str(s) for s in seq)])]
+				idleoff_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
 			mean_dict.update({'Idle' : idleoff_means})
 
 		if len(mean_dict) == 3:
 			return mean_dict
-
 		else:
 			return None
-
-
-
-
