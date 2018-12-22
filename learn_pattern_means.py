@@ -71,25 +71,29 @@ if __name__ == '__main__':
 		if fs:
 			files.extend(os.path.join(root,f) for f in fs if f.endswith('.csv.gz') and fnmatch.fnmatch(f,"*_*_*"))
 
-	for file in files:
-		print (file[-17:-7])
-		
+	for file in files:				
 		file1, file2 = get_required_files(device_path, file[-17:-7])
 		power_df = initial_processing(file1, file2)
-		pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
-		
-		if os.path.isfile(training_file):
-			with open(training_file, 'r') as f:
-				mean_dict = json.load(f)
+		try:
+			if power_df.shape[0] >= 0.7*86400:
+				print (file[-17:-7])
+				pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
 
-			mean_dict_day = pl.get_mean_dictionary()
-			
-			if mean_dict_day != None:
-				for region in mean_dict:
-					mean_dict[region].extend(mean_dict_day[region])
+				if os.path.isfile(training_file):
+					with open(training_file, 'r') as f:
+						mean_dict = json.load(f)
+
+					mean_dict_day = pl.get_mean_dictionary()
+					
+					if mean_dict_day != None:
+						for region in mean_dict:
+							mean_dict[region].extend(mean_dict_day[region])
+				
+				else:
+					mean_dict = pl.get_mean_dictionary()
+					
+				with open(training_file, 'w') as f:
+					json.dump(mean_dict, f)
 		
-		else:
-			mean_dict = pl.get_mean_dictionary()
-			
-		with open(training_file, 'w') as f:
-			json.dump(mean_dict, f)
+		except pattern_length.SinglePatternError:
+			pass
