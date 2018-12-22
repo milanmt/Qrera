@@ -37,7 +37,7 @@ class PatternLength:
 		self.order = order
 		self.n_states = n_states
 		self.uni_min = 3   ## Pattern has to be atleast this long to be considered a pattern
-		self.no_max_freq = 3 ## No.of patterns from each region to consider for matching
+		self.no_max_freq = 3 ## No.of patterns from each region to consider for matching and learning
 		##### Need not be initialised. Initialised as code runs
 		final_peaks, self.__peak_indices = self.__preprocess_power(raw_dataframe)
 		self.__off_regions = [e for e,p in enumerate(self.power) if p == 0]
@@ -897,11 +897,12 @@ class PatternLength:
 		idleoff_means = []
 
 		working_patterns = self.__pattern_dict[self.working_label]
-		uload_patterns, idleoff_patterns = self.__get_load_signals()	
-		
-		for seq,f in working_patterns:
+		sorted_patterns	= sorted(working_patterns, key=lambda x:x[1], reverse=True)
+		for seq,f in sorted_patterns[:self.no_max_freq]:
 			working_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
 		mean_dict.update({ 'Working': working_means})
+
+		uload_patterns, idleoff_patterns = self.__get_load_signals()	
 
 		if uload_patterns is not None:
 			for seq,f in uload_patterns:
