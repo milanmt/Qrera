@@ -905,12 +905,14 @@ class PatternLength:
 		uload_patterns, idleoff_patterns = self.__get_load_signals()	
 
 		if uload_patterns is not None:
-			for seq,f in uload_patterns:
+			sorted_upatterns	= sorted(uload_patterns, key=lambda x:x[1], reverse=True)
+			for seq,f in sorted_upatterns[:self.no_max_freq-1]:
 				uload_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
 			mean_dict.update({'ULoad': uload_means})
 
 		if idleoff_patterns is not None:
-			for seq, f in idleoff_patterns:
+			sorted_ipatterns	= sorted(idleoff_patterns, key=lambda x:x[1], reverse=True)
+			for seq,f in sorted_ipatterns[:self.no_max_freq-1]:
 				idleoff_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
 			mean_dict.update({'Idle' : idleoff_means})
 
@@ -918,3 +920,6 @@ class PatternLength:
 			return mean_dict
 		else:
 			return None
+
+
+### Could try including variance, if mean alone doesn't work
