@@ -1,5 +1,7 @@
 #! /usr/bin/env python3
 
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.mixture import BayesianGaussianMixture
 from sklearn.naive_bayes import GaussianNB
 from datetime import datetime, timedelta
 import plotly.graph_objs as go
@@ -59,8 +61,34 @@ def get_classifier(training_file):
 
 	X = np.array(input_vals).reshape(-1,1)
 	Y = np.array(target_vals)
-	classifier = GaussianNB()
+	# classifier = GaussianNB()
+	classifier = KNeighborsClassifier(n_neighbors=1)
 	classifier.fit(X,Y)
+	return classifier, targets
+
+def get_mv_classifier(training_file):
+	print ('Extracting classfier from json file...')
+	with open(training_file, 'r') as f:
+		mv_dict = json.load(f)
+
+	target_vals = []
+	input_vals = []
+
+	targets = [region for region in mv_dict.keys()]
+
+	for region in mv_dict:
+		region_ind = targets.index(region)
+		for val in mv_dict[region]:
+			target_vals.append(region_ind)
+			input_vals.append(val)
+
+	X = np.array(input_vals)
+	Y = np.array(target_vals)
+	# classifier = GaussianNB()
+	classifier = KNeighborsClassifier(n_neighbors=1)
+	classifier.fit(X,Y)
+	# print (classifier.theta_)
+	# print (targets, 'targets')
 	return classifier, targets
 
 def initial_processing(f1):
@@ -86,10 +114,22 @@ if __name__ == '__main__':
 	device_path = device_path = '/media/milan/DATA/Qrera/PYN/B4E62D388561'
 	day = '2018_11_02'
 
+	# region_classifier, region_labels = get_mv_classifier(training_file)
 	region_classifier, region_labels = get_classifier(training_file)
 	file1 = get_required_file(device_path, day)
 	power_df = initial_processing(file1)
 
+
+	### Discretise over trained power signals (One weeks data)
+	try:
+		X = np.array(power_df['POWER']).reshape(-1,1)
+	except KeyError:
+		X = np.array(power_df['VALUE']).reshape(-1,1)
+		
+	dpgmm = BayesianGaussianMixture(n_components=10,max_iter= 100,random_state=0).fit(X)
+	state_means = [x[0] for x in dpgmm.means_]
+	print (state_means)
+	
 	### Classification over 60 sec intervals
 	print ('Classifying signal over 60 sec intevrals...')
 	classified_signal = []
@@ -106,17 +146,27 @@ if __name__ == '__main__':
 			label = len(region_labels)
 		else:
 			try:
-				avg_power = req_df['POWER'].mean()
+				state_power = dpgmm.predict(np.array(req_df['POWER']).reshape(-1,1))
+				sum_power = req_df['POWER'].sum()
 			except KeyError:
-				avg_power = req_df['VALUE'].mean()
+				state_power = dpgmm.predict(np.array(req_df['VALUE']).reshape(-1,1))
+				sum_power = req_df['VALUE'].sum()
 
-			if avg_power == 0.0:
+			avg_power = np.mean([state_means[s] for s in state_power])
+			# print (avg_power, 'avg')
+			var_power = np.std([state_means[s] for s in state_power])
+			# print (var_power, 'std')
+			
+
+			if sum_power == 0.0:
 				region = 'Off'
 				label = len(region_labels)
 			else:
+				# region_id = region_classifier.predict(np.array([[avg_power,var_power]]))
 				region_id = region_classifier.predict(np.array([[avg_power]]))
 				region = region_labels[int(region_id)]
 				label = int(region_id)
+				# print (region, 'classified')
 
 		classified_signal.append(region)
 		classified_signal_id.append(label)
@@ -124,6 +174,7 @@ if __name__ == '__main__':
 
 	print ('Plotting...')
 	unique_labels = list(np.unique(classified_signal_id))
+	print (unique_labels, region_labels)
 	power = preprocess_power(power_df)
 	y_plot = np.zeros((len(unique_labels),len(power)))
 	for e,el in enumerate(classified_signal_id):

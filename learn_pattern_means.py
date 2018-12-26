@@ -52,18 +52,18 @@ def get_required_files(device_path, day):
 if __name__ == '__main__':
 
 	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D388561'
-	training_file = '/media/milan/DATA/Qrera/trials/data/mean_dict_complete.json'
+	training_file = '/media/milan/DATA/Qrera/trials/data/mv_dict_complete.json'
 
 	# ### One day
 	# day = '2018_11_02'
 	# file1, file2 = get_required_files(device_path, day)
 	# power_df = initial_processing(file1, file2)
 	# pl = pattern_length.PatternLength(power_df, 86400, 5, 30, 3)
-	# mean_dict = pl.get_mean_dictionary()
-	# print (mean_dict)
+	# mv_dict = pl.get_mean_variance_dictionary()
+	# print (mv_dict)
 
 	# with open (training_file, 'w') as f:
-	# 	json.dump(mean_dict,f)
+	# 	json.dump(mv_dict,f)
 
 	#### Over multiple days 
 	files = []
@@ -81,19 +81,19 @@ if __name__ == '__main__':
 
 				if os.path.isfile(training_file):
 					with open(training_file, 'r') as f:
-						mean_dict = json.load(f)
+						mv_dict = json.load(f)
 
-					mean_dict_day = pl.get_mean_dictionary()
+					mv_dict_day = pl.get_mean_variance_dictionary()
 					
-					if mean_dict_day != None:
-						for region in mean_dict:
-							mean_dict[region].extend(mean_dict_day[region])
+					if mv_dict_day != None:
+						for region in mv_dict:
+							mv_dict[region].extend(mv_dict_day[region])
 				
 				else:
-					mean_dict = pl.get_mean_dictionary()
+					mv_dict = pl.get_mean_variance_dictionary()
 					
 				with open(training_file, 'w') as f:
-					json.dump(mean_dict, f)
+					json.dump(mv_dict, f)
 		
 		except pattern_length.SinglePatternError:
 			pass
