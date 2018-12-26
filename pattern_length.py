@@ -920,4 +920,39 @@ class PatternLength:
 		else:
 			return None
 
-### Could try including variance, if mean alone doesn't work
+
+	def get_mean_variance_dictionary(self):
+		mv_dict = dict()
+		working_means = []
+		working_vars = []
+		uload_means = []
+		uload_vars = []
+		idleoff_means = []
+		idleoff_vars = []
+
+		working_patterns = self.__pattern_dict[self.working_label]
+		sorted_patterns	= sorted(working_patterns, key=lambda x:x[1], reverse=True)
+		for seq,f in sorted_patterns[:self.no_max_freq]:
+			working_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
+			working_vars.append(int(np.std([self.__state_attributes[str(s)][0] for s in seq])))
+		mv_dict.update({ 'Working': [mv for mv in zip(working_means,working_vars)]})
+
+		uload_patterns, idleoff_patterns = self.__get_load_signals()	
+
+		if uload_patterns is not None:
+			for seq,f in uload_patterns:
+				uload_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
+				uload_vars.append(int(np.std([self.__state_attributes[str(s)][0] for s in seq])))
+			mv_dict.update({'ULoad': [mv for mv in zip(uload_means,uload_vars)]})
+
+		if idleoff_patterns is not None:
+			for seq,f in idleoff_patterns:
+				idleoff_means.append(int(np.mean([self.__state_attributes[str(s)][0] for s in seq])))
+				idleoff_vars.append(int(np.std([self.__state_attributes[str(s)][0] for s in seq])))
+			mv_dict.update({'Idle' : [mv for mv in zip(idleoff_means, idleoff_vars)]})
+
+		if len(mv_dict) == 3:
+			return mv_dict
+		else:
+			return None
+
