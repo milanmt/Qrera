@@ -11,7 +11,16 @@ import plotly
 import json
 import os
 
+def timing_wrapper(func):
+	def wrapper(*args,**kwargs):
+		t = datetime.now()
+		func_val = func(*args,**kwargs)
+		time_taken = datetime.now() -t
+		print (str(func),' took: ', time_taken)
+		return func_val
+	return wrapper
 
+@timing_wrapper
 def preprocess_power(df):
 	print ('Preprocessing power...')
 	### Preprocessing
@@ -43,6 +52,7 @@ def preprocess_power(df):
 			power[t-offset] = (power[t-offset]+df.iloc[i,0])/2
 	return power
 
+@timing_wrapper
 def get_classifier(training_file):
 	print ('Extracting classfier from json file...')
 	with open(training_file, 'r') as f:
@@ -66,6 +76,7 @@ def get_classifier(training_file):
 	classifier.fit(X,Y)
 	return classifier, targets
 
+@timing_wrapper
 def get_mv_classifier(training_file):
 	print ('Extracting classfier from json file...')
 	with open(training_file, 'r') as f:
@@ -85,7 +96,7 @@ def get_mv_classifier(training_file):
 	X = np.array(input_vals)
 	Y = np.array(target_vals)
 	# classifier = GaussianNB()
-	classifier = KNeighborsClassifier(n_neighbors=1)
+	classifier = KNeighborsClassifier(n_neighbors=5)
 	classifier.fit(X,Y)
 	# print (classifier.theta_)
 	# print (targets, 'targets')
@@ -107,33 +118,54 @@ def get_required_file(device_path, day):
 	else:
 		raise ValueError("File not available")
 
+@timing_wrapper
+def get_state_means(device_path, day):
+	print ('Discretisings states...')
+	start_day = (datetime.strptime(day + ' 00:00:00', '%Y_%m_%d %H:%M:%S') - timedelta(weeks=1))
+	req_day = start_day
+	for i in range(7):
+		req_day_str = req_day.strftime('%Y_%m_%d')
+		fname = device_path+'/'+str(req_day.year)+'/'+str(req_day.month)+'/'+req_day_str+'.csv.gz'
+		if not os.path.isfile(fname):
+			raise IOError('File does not exist. Cannot train classifier without data.')
+
+		df = pandas.read_csv(fname)
+		try:
+			df_power = df['POWER']
+		except KeyError:
+			df_power = df['VALUE']
+
+		if req_day_str == start_day.strftime('%Y_%m_%d'):
+			power_array = np.array(df_power)
+		else:
+			power_array = np.append(power_array, np.array(df_power))
+
+		req_day = req_day + timedelta(days=1)
+
+	X = power_array.reshape(-1,1)
+	dpgmm = BayesianGaussianMixture(n_components=10,max_iter= 100,random_state=0).fit(X)
+	state_means = [x[0] for x in dpgmm.means_]
+	return dpgmm, state_means
+	
 
 if __name__ == '__main__':
 
-	training_file = '/media/milan/DATA/Qrera/trials/data/mean_dict.json'
-	device_path = device_path = '/media/milan/DATA/Qrera/PYN/B4E62D388561'
+	
+	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D388561'
 	day = '2018_11_02'
-
-	# region_classifier, region_labels = get_mv_classifier(training_file)
-	region_classifier, region_labels = get_classifier(training_file)
 	file1 = get_required_file(device_path, day)
 	power_df = initial_processing(file1)
 
 
-	### Discretise over trained power signals (One weeks data)
-	try:
-		X = np.array(power_df['POWER']).reshape(-1,1)
-	except KeyError:
-		X = np.array(power_df['VALUE']).reshape(-1,1)
-		
-	dpgmm = BayesianGaussianMixture(n_components=10,max_iter= 100,random_state=0).fit(X)
-	state_means = [x[0] for x in dpgmm.means_]
-	print (state_means)
-	
+	## THRESHOLD
+	##################################################################################################################################################################################################################
+	Th1 = 2000   # Distinguish between idle and working
+	Th2 = 1000   # Distinguish between loading and idle
+
 	### Classification over 60 sec intervals
 	print ('Classifying signal over 60 sec intevrals...')
-	classified_signal = []
 	classified_signal_id = []
+	region_labels = ['Working', 'Uload', 'Idle', 'Off']
 	start_int = datetime.strptime(day+' 00:00:00', '%Y_%m_%d %H:%M:%S')
 	for i in range(1440):
 		print (i,end='\r')
@@ -142,35 +174,77 @@ if __name__ == '__main__':
 		end_str = datetime.isoformat(end_int, sep=' ')
 		req_df = power_df[(power_df['TS']>=start_str) & (power_df['TS']<end_str)]
 		if req_df.empty:
-			region = 'Off'
-			label = len(region_labels)
+			label = 3
 		else:
 			try:
-				state_power = dpgmm.predict(np.array(req_df['POWER']).reshape(-1,1))
-				sum_power = req_df['POWER'].sum()
+				avg_power = req_df['POWER'].mean()
 			except KeyError:
-				state_power = dpgmm.predict(np.array(req_df['VALUE']).reshape(-1,1))
-				sum_power = req_df['VALUE'].sum()
-
-			avg_power = np.mean([state_means[s] for s in state_power])
-			# print (avg_power, 'avg')
-			var_power = np.std([state_means[s] for s in state_power])
-			# print (var_power, 'std')
+				avg_power = req_df['VALUE'].mean()
 			
-
-			if sum_power == 0.0:
-				region = 'Off'
-				label = len(region_labels)
+			if avg_power == 0.0:
+				label = 3
+			elif avg_power >= Th1:
+				label = 0
 			else:
-				# region_id = region_classifier.predict(np.array([[avg_power,var_power]]))
-				region_id = region_classifier.predict(np.array([[avg_power]]))
-				region = region_labels[int(region_id)]
-				label = int(region_id)
-				# print (region, 'classified')
+				if avg_power >= Th2:
+					label = 1
+				else:
+					label = 2
 
-		classified_signal.append(region)
 		classified_signal_id.append(label)
 		start_int = end_int
+
+	### ML 
+	##################################################################################################################################################################################################################
+	# training_file = '/media/milan/DATA/Qrera/trials/data/mean_dict.json'
+
+	# ### Discretise over trained power signals (One weeks data)
+	# dpgmm, state_means = get_state_means(device_path, day)
+
+	# ### Get required classification from training data
+	# # region_classifier, region_labels = get_mv_classifier(training_file)
+	# region_classifier, region_labels = get_classifier(training_file)
+	
+	# ### Classification over 60 sec intervals
+	# print ('Classifying signal over 60 sec intevrals...')
+	# classified_signal = []
+	# classified_signal_id = []
+	# start_int = datetime.strptime(day+' 00:00:00', '%Y_%m_%d %H:%M:%S')
+	# for i in range(1440):
+	# 	print (i,end='\r')
+	# 	end_int = start_int + timedelta(minutes=1)   ## Window Required
+	# 	start_str = datetime.isoformat(start_int, sep=' ')
+	# 	end_str = datetime.isoformat(end_int, sep=' ')
+	# 	req_df = power_df[(power_df['TS']>=start_str) & (power_df['TS']<end_str)]
+	# 	if req_df.empty:
+	# 		region = 'Off'
+	# 		label = len(region_labels)
+	# 	else:
+	# 		try:
+	# 			state_power = dpgmm.predict(np.array(req_df['POWER']).reshape(-1,1))
+	# 			sum_power = req_df['POWER'].sum()
+	# 		except KeyError:
+	# 			state_power = dpgmm.predict(np.array(req_df['VALUE']).reshape(-1,1))
+	# 			sum_power = req_df['VALUE'].sum()
+
+	# 		avg_power = np.mean([state_means[s] for s in state_power])
+	# 		# print (avg_power, 'avg')
+	# 		var_power = np.std([state_means[s] for s in state_power])
+	# 		# print (var_power, 'std')
+			
+	# 		if sum_power == 0.0:
+	# 			region = 'Off'
+	# 			label = len(region_labels)
+	# 		else:
+	# 			# region_id = region_classifier.predict(np.array([[avg_power,var_power]]))
+	# 			region_id = region_classifier.predict(np.array([[avg_power]]))
+	# 			region = region_labels[int(region_id)]
+	# 			label = int(region_id)
+	# 			# print (region, 'classified')
+
+	# 	classified_signal.append(region)
+	# 	classified_signal_id.append(label)
+	# 	start_int = end_int
 
 	print ('Plotting...')
 	unique_labels = list(np.unique(classified_signal_id))
