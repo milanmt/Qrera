@@ -148,6 +148,39 @@ def get_state_means(device_path, day):
 	return dpgmm, state_means
 	
 
+def get_current_status(log_path):
+	if os.path.isfile(log_path):
+		with open(log_path, 'r') as f:
+			status_dict = json.load(f)
+	else:
+		status_dict = dict()
+		status_dict['current_status'] = 0
+		status_dict['Working'] = 0
+		status_dict['Loading'] = 0
+		status_dict['Idle'] = 0
+		status_dict['Off'] = 0
+		status_dict['notification_sent'] = False
+		with open(log_path, 'w') as f:
+			json.dump(status_dict, f, indent=4)
+	return status_dict
+
+def update_status_log(log_path, detected_region):
+	status_dict = get_current_status(log_path)
+	if status_dict['current_status'] == 0:
+		status_dict['current_status'] = detected_region
+		status_dict[detected_region] = 1
+	else:
+		prev_stat = status_dict['current_status']
+		if prev_stat == detected_region:
+			status_dict[detected_region] += 1
+		else:
+			status_dict[prev_stat] = 0
+			status_dict['current_status'] = detected_region
+			status_dict[detected_region] = 1
+			status_dict['notification_sent'] = False
+	return status_dict
+
+
 if __name__ == '__main__':
 
 	
@@ -161,14 +194,17 @@ if __name__ == '__main__':
 	##################################################################################################################################################################################################################
 	Th1 = 2000   # Distinguish between idle and working
 	Th2 = 1000   # Distinguish between loading and idle
+	expected_loading_time = 4 # Minutes 
+	expected_idle_time = 4    # Minutes
+	notifier_log_path = 'data/notifier_log_path.json'
 
 	### Classification over 60 sec intervals
 	print ('Classifying signal over 60 sec intevrals...')
 	classified_signal_id = []
-	region_labels = ['Working', 'Uload', 'Idle', 'Off']
+	region_labels = ['Working', 'Loading', 'Idle', 'Off']
 	start_int = datetime.strptime(day+' 00:00:00', '%Y_%m_%d %H:%M:%S')
 	for i in range(1440):
-		print (i,end='\r')
+		# print (i,end='\r')
 		end_int = start_int + timedelta(minutes=1)   ## Window Required
 		start_str = datetime.isoformat(start_int, sep=' ')
 		end_str = datetime.isoformat(end_int, sep=' ')
@@ -190,6 +226,18 @@ if __name__ == '__main__':
 					label = 1
 				else:
 					label = 2
+
+			status_dict = update_status_log(notifier_log_path, region_labels[label])
+			# print (status_dict)
+			if status_dict['Loading'] > expected_loading_time and not status_dict['notification_sent']:
+				print ('NOTIFICATION FOR EXCEEDING EXPECTED LOADING TIME')
+				status_dict['notification_sent'] = True
+			if status_dict['Idle'] > expected_idle_time and not status_dict['notification_sent']:
+				print ('NOTIFICATION FOR EXCEEDING EXPECTED IDLE TIME')
+				status_dict['notification_sent'] = True
+
+			with open(notifier_log_path, 'w') as f:
+				json.dump(status_dict, f, indent=4)
 
 		classified_signal_id.append(label)
 		start_int = end_int
@@ -246,16 +294,16 @@ if __name__ == '__main__':
 	# 	classified_signal_id.append(label)
 	# 	start_int = end_int
 
-	print ('Plotting...')
-	unique_labels = list(np.unique(classified_signal_id))
-	print (unique_labels, region_labels)
-	power = preprocess_power(power_df)
-	y_plot = np.zeros((len(unique_labels),len(power)))
-	for e,el in enumerate(classified_signal_id):
-		y_plot[unique_labels.index(el),e*60:(e+1)*60] = power[e*60:(e+1)*60]
-	time = np.arange(86400)
+	# print ('Plotting...')
+	# unique_labels = list(np.unique(classified_signal_id))
+	# print (unique_labels, region_labels)
+	# power = preprocess_power(power_df)
+	# y_plot = np.zeros((len(unique_labels),len(power)))
+	# for e,el in enumerate(classified_signal_id):
+	# 	y_plot[unique_labels.index(el),e*60:(e+1)*60] = power[e*60:(e+1)*60]
+	# time = np.arange(86400)
 	
-	plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
-	data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
-	fig = go.Figure(data = data)
-	plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
+	# plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
+	# data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
+	# fig = go.Figure(data = data)
+	# plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
