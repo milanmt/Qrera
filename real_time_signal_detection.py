@@ -208,123 +208,124 @@ if __name__ == '__main__':
 
 	
 	device_path = '/media/milan/DATA/Qrera/PYN/B4E62D388561'
-	day = '2018_11_02'
+	day = '2018_11_12'
 	file1 = get_required_file(device_path, day)
 	power_df = initial_processing(file1)
 
 
 	## THRESHOLD
 	##################################################################################################################################################################################################################
-	# Th1 = 2000   # Distinguish between idle and working
-	# Th2 = 1000   # Distinguish between loading and idle
-	# expected_loading_time = 4 # Minutes 
-	# expected_idle_time = 4    # Minutes
-	# notifier_log_path = 'data/notifier_log_path.json'
+	Th1 = 2000   # Distinguish between idle and working
+	Th2 = 1000   # Distinguish between loading and idle
+	expected_loading_time = 4 # Minutes 
+	expected_idle_time = 4    # Minutes
+	notifier_log_path = 'data/notifier_log_path.json'
 
-	# ### Classification over 60 sec intervals
-	# print ('Classifying signal over 60 sec intevrals...')
-	# classified_signal_id = []
-	# region_labels = ['Working', 'Loading', 'Idle', 'Off']
-	# start_int = datetime.strptime(day+' 00:00:00', '%Y_%m_%d %H:%M:%S')
-	# for i in range(1440):
-	# 	# print (i,end='\r')
-	# 	end_int = start_int + timedelta(minutes=1)   ## Window Required
-	# 	start_str = datetime.isoformat(start_int, sep=' ')
-	# 	end_str = datetime.isoformat(end_int, sep=' ')
-	# 	req_df = power_df[(power_df['TS']>=start_str) & (power_df['TS']<end_str)]
-	# 	if req_df.empty:
-	# 		label = 3
-	# 	else:
-	# 		try:
-	# 			avg_power = req_df['POWER'].mean()
-	# 		except KeyError:
-	# 			avg_power = req_df['VALUE'].mean()
-			
-	# 		if avg_power == 0.0:
-	# 			label = 3
-	# 		elif avg_power >= Th1:
-	# 			label = 0
-	# 		else:
-	# 			if avg_power >= Th2:
-	# 				label = 1
-	# 			else:
-	# 				label = 2
-
-	# 		status_dict = update_status_log(notifier_log_path, region_labels[label])
-	# 		# print (status_dict)
-	# 		if status_dict['Loading'] > expected_loading_time and not status_dict['notification_sent']:
-	# 			print ('NOTIFICATION FOR EXCEEDING EXPECTED LOADING TIME')
-	# 			status_dict['notification_sent'] = True
-	# 		if status_dict['Idle'] > expected_idle_time and not status_dict['notification_sent']:
-	# 			print ('NOTIFICATION FOR EXCEEDING EXPECTED IDLE TIME')
-	# 			status_dict['notification_sent'] = True
-
-	# 		with open(notifier_log_path, 'w') as f:
-	# 			json.dump(status_dict, f, indent=4)
-
-	# 	classified_signal_id.append(label)
-	# 	start_int = end_int
-
-	### ML 
-	##################################################################################################################################################################################################################
-	training_file = '/media/milan/DATA/Qrera/trials/data/mean_dict.json'
-
-	### Discretise over trained power signals (One weeks data)
-	# dpgmm, state_means = get_state_means(device_path, day)
-
-	### Get required classification from training data
-	# region_classifier, region_labels = get_mv_classifier(training_file)
-	region_classifier, region_labels = get_classifier(training_file)
-	
 	### Classification over 60 sec intervals
 	print ('Classifying signal over 60 sec intevrals...')
-	classified_signal = []
 	classified_signal_id = []
+	region_labels = ['Working', 'Loading', 'Idle', 'Off']
 	start_int = datetime.strptime(day+' 00:00:00', '%Y_%m_%d %H:%M:%S')
 	for i in range(1440):
-		print (i,end='\r')
+		# print (i,end='\r')
 		end_int = start_int + timedelta(minutes=1)   ## Window Required
 		start_str = datetime.isoformat(start_int, sep=' ')
 		end_str = datetime.isoformat(end_int, sep=' ')
 		req_df = power_df[(power_df['TS']>=start_str) & (power_df['TS']<end_str)]
 		if req_df.empty:
-			region = 'Off'
-			label = len(region_labels)
+			label = 3
 		else:
 			try:
-				# state_power = dpgmm.predict(np.array(req_df['POWER']).reshape(-1,1))
-				sum_power = req_df['POWER'].sum()
-				power_window = req_df['POWER']
+				avg_power = req_df['POWER'].mean()
 			except KeyError:
-				# state_power = dpgmm.predict(np.array(req_df['VALUE']).reshape(-1,1))
-				sum_power = req_df['VALUE'].sum()
-				power_window = req_df['VALUE']
-
-			# avg_power = np.mean([state_means[s] for s in state_power])
-			# # print (avg_power, 'avg')
-			# var_power = np.std([state_means[s] for s in state_power])
-			# # print (var_power, 'std')
-			avg_power = sum_power/req_df.shape[0]
+				avg_power = req_df['VALUE'].mean()
 			
-			if sum_power == 0.0:
-				region = 'Off'
-				label = len(region_labels)
+			if avg_power == 0.0:
+				label = 3
+			elif avg_power >= Th1:
+				label = 0
 			else:
-				# region_id = region_classifier.predict(np.array([[avg_power,var_power]]))
-				
-				# region_id = region_classifier.predict(np.array([[avg_power]]))
-				
-				region_ids = region_classifier.predict(np.array(power_window).reshape(-1,1))
-				regions_present, counts_regions = np.unique(region_ids, return_counts=True)
-				region_id = regions_present[np.argmax(counts_regions)]
-				
-				region = region_labels[int(region_id)]
-				label = int(region_id)
-				# print (region, 'classified')
+				if avg_power >= Th2:
+					label = 1
+				else:
+					label = 2
 
-		classified_signal.append(region)
+		print(i, avg_power, label) 
+		# status_dict = update_status_log(notifier_log_path, region_labels[label])
+		# # print (status_dict)
+		# if status_dict['Loading'] > expected_loading_time and not status_dict['notification_sent']:
+		# 	print ('NOTIFICATION FOR EXCEEDING EXPECTED LOADING TIME')
+		# 	status_dict['notification_sent'] = True
+		# if status_dict['Idle'] > expected_idle_time and not status_dict['notification_sent']:
+		# 	print ('NOTIFICATION FOR EXCEEDING EXPECTED IDLE TIME')
+		# 	status_dict['notification_sent'] = True
+
+		# with open(notifier_log_path, 'w') as f:
+		# 	json.dump(status_dict, f, indent=4)
+
 		classified_signal_id.append(label)
 		start_int = end_int
+
+	### ML 
+	##################################################################################################################################################################################################################
+	# training_file = '/media/milan/DATA/Qrera/trials/data/mean_dict.json'
+
+	# ### Discretise over trained power signals (One weeks data)
+	# # dpgmm, state_means = get_state_means(device_path, day)
+
+	# ### Get required classification from training data
+	# # region_classifier, region_labels = get_mv_classifier(training_file)
+	# region_classifier, region_labels = get_classifier(training_file)
+	
+	# ### Classification over 60 sec intervals
+	# print ('Classifying signal over 60 sec intevrals...')
+	# classified_signal = []
+	# classified_signal_id = []
+	# start_int = datetime.strptime(day+' 00:00:00', '%Y_%m_%d %H:%M:%S')
+	# for i in range(1440):
+	# 	print (i,end='\r')
+	# 	end_int = start_int + timedelta(minutes=1)   ## Window Required
+	# 	start_str = datetime.isoformat(start_int, sep=' ')
+	# 	end_str = datetime.isoformat(end_int, sep=' ')
+	# 	req_df = power_df[(power_df['TS']>=start_str) & (power_df['TS']<end_str)]
+	# 	if req_df.empty:
+	# 		region = 'Off'
+	# 		label = len(region_labels)
+	# 	else:
+	# 		try:
+	# 			# state_power = dpgmm.predict(np.array(req_df['POWER']).reshape(-1,1))
+	# 			sum_power = req_df['POWER'].sum()
+	# 			power_window = req_df['POWER']
+	# 		except KeyError:
+	# 			# state_power = dpgmm.predict(np.array(req_df['VALUE']).reshape(-1,1))
+	# 			sum_power = req_df['VALUE'].sum()
+	# 			power_window = req_df['VALUE']
+
+	# 		# avg_power = np.mean([state_means[s] for s in state_power])
+	# 		# # print (avg_power, 'avg')
+	# 		# var_power = np.std([state_means[s] for s in state_power])
+	# 		# # print (var_power, 'std')
+	# 		avg_power = sum_power/req_df.shape[0]
+			
+	# 		if sum_power == 0.0:
+	# 			region = 'Off'
+	# 			label = len(region_labels)
+	# 		else:
+	# 			# region_id = region_classifier.predict(np.array([[avg_power,var_power]]))
+				
+	# 			# region_id = region_classifier.predict(np.array([[avg_power]]))
+				
+	# 			region_ids = region_classifier.predict(np.array(power_window).reshape(-1,1))
+	# 			regions_present, counts_regions = np.unique(region_ids, return_counts=True)
+	# 			region_id = regions_present[np.argmax(counts_regions)]
+				
+	# 			region = region_labels[int(region_id)]
+	# 			label = int(region_id)
+	# 			# print (region, 'classified')
+
+	# 	classified_signal.append(region)
+	# 	classified_signal_id.append(label)
+	# 	start_int = end_int
 
 	print ('Plotting...')
 	unique_labels = list(np.unique(classified_signal_id))
