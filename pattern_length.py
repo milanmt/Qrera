@@ -88,7 +88,7 @@ class PatternLength:
 			### butterworth
 			a,b = butter(3, 0.5)
 			power_nf = filtfilt(a, b, self.power)
-			min_power_nf
+			min_power_nf = min(power_nf)
 			if min_power_nf < 0:  
 				power_f = power_nf + abs(min_power_nf)
 			else:
@@ -138,7 +138,23 @@ class PatternLength:
 			mean = sorted_means[s][0]
 			state_attributes.update({ str(s) : (mean, dpgmm.covariances_[original_means.index(mean)])}) # key should be string for json 
 		
-		# print ('states ->', state_attributes)
+		print ('states ->', state_attributes)
+
+		print ('Number of states: ', len(np.unique(labels)), states)
+		# print (dpgmm.means_)
+		# print (dpgmm.covariances_)
+
+		# color=['navy', 'cornflowerblue', 'gold', 'c', 'darkorange', 'r', 'g', 'm', 'y', 'k', 'teal', 'chocolate', 'crimson', 'dimgray', 'purple']
+		
+		# color_labels = []
+		# for label in labels:
+		# 	color_labels.append(color[int(label)])
+
+		# print ([ color[s] for s in states])
+
+		# plt.scatter(range(len(final_peaks)), final_peaks, color= color_labels)
+		# plt.show()
+
 		return labels[:], state_attributes
 
 	def __partition_states(self):
@@ -615,7 +631,7 @@ class PatternLength:
 				else:
 					pattern_sequence.append(req_label[0])
 					# print (req_label[0])
-					if end_ind <= len(self.__sequence):
+					if end_ind <= len(self.power):
 						pattern_sequence_indices.append(self.__peak_indices[end_ind-1]+1)
 						# print (self.__peak_indices[end_ind-1]+1)
 					else:
@@ -671,34 +687,34 @@ class PatternLength:
 		cycle_time = p_l/count_avg
 		print ('Avg cycle time ->', cycle_time)
 
-		print ('Mapping time indices...')  ## This is not needed for average length
-		simplified_seq = np.zeros((len(self.power)))
-		start_ind = 0
-		for e,i in enumerate(self.p_indices):
-			simplified_seq[start_ind:i+1] = self.p_array[e]
-			start_ind = i+1
-		simplified_seq[self.__off_regions] = 2
+		# print ('Mapping time indices...')  ## This is not needed for average length
+		# simplified_seq = np.zeros((len(self.power)))
+		# start_ind = 0
+		# for e,i in enumerate(self.p_indices):
+		# 	simplified_seq[start_ind:i+1] = self.p_array[e]
+		# 	start_ind = i+1
+		# simplified_seq[self.__off_regions] = 2
 
-		print ('Plotting...')
-		unique_labels = list(np.unique(simplified_seq))
-		y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
-		for e,el in enumerate(simplified_seq):
-			# print (e,el)
-			if el == 2:
-				y_plot[unique_labels.index(el),e] = 1500
-			else:
-				y_plot[unique_labels.index(el),e] = self.power[e]
-		time = np.arange(len(self.power))
+		# print ('Plotting...')
+		# unique_labels = list(np.unique(simplified_seq))
+		# y_plot = np.zeros((len(unique_labels),len(simplified_seq)))
+		# for e,el in enumerate(simplified_seq):
+		# 	# print (e,el)
+		# 	if el == 2:
+		# 		y_plot[unique_labels.index(el),e] = 1500
+		# 	else:
+		# 		y_plot[unique_labels.index(el),e] = self.power[e]
+		# time = np.arange(len(self.power))
 	
-		plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
-		data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
-		pattern_edges = len(time)*[None]
-		for ind in self.p_indices:
-			pattern_edges[ind] = self.power[ind]
-		# print (len([l for l in pattern_edges if l != None]))
-		data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
-		fig = go.Figure(data = data)
-		plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
+		# plotly.tools.set_credentials_file(username='MilanMariyaTomy', api_key= '8HntwF4rtsUwPvjW3Sl4')
+		# data = [go.Scattergl(x=time, y=y_plot[i,:]) for i in range(len(unique_labels))]
+		# pattern_edges = len(time)*[None]
+		# for ind in self.p_indices:
+		# 	pattern_edges[ind] = self.power[ind]
+		# # print (len([l for l in pattern_edges if l != None]))
+		# data.append(go.Scattergl(x=time,y=pattern_edges,mode='markers'))
+		# fig = go.Figure(data = data)
+		# plotly.plotly.plot(fig, filename='fwtc_pattern_counting')
 		return cycle_time
 
 	def get_estimate_count(self):
@@ -715,7 +731,7 @@ class PatternLength:
 		if len(idle_pf) == 1:
 			req_idle = idle_pf	
 			self.__idle_predictor = None
-			print (req_idle)
+			# print (req_idle)
 			return req_idle, None
 	
 		else:
@@ -730,7 +746,7 @@ class PatternLength:
 
 			seq_fs = [seq for seq in idle_pf]
 			seq_fs.sort(key=lambda x: x[1])
-			print (seq_fs)
+			# print (seq_fs)
 			c1 = np.mean([self.__state_attributes[str(s)][0] for s in seq_fs[-1][0]])
 			c2 = np.mean([self.__state_attributes[str(s)][0] for s in seq_fs[-2][0]])
 			
@@ -808,17 +824,19 @@ class PatternLength:
 					real_idle = self.power[:self.p_indices[i]+1]
 				else:
 					real_idle = self.power[self.p_indices[i-1]:self.p_indices[i]+1]
-				
+				# print (real_idle)
 				ri_m = np.mean(real_idle)
 				# ri_v = np.std(real_idle)
-				if self.__idle_predictor != None:
-					l_id = self.__idle_predictor.predict(np.array([[ri_m]]))
-					if l_id == self.load_label:
-						p_array_w_uload[i] = 4  # 0,1, 2- off, 3-ambiguous, 4-uload
-				else:
-					if ri_m > self.idle_mean - self.idle_var:
-						uload_present = True
-						p_array_w_uload[i] = 4
+				if len(real_idle) > 0:
+					
+					if self.__idle_predictor != None:
+						l_id = self.__idle_predictor.predict(np.array([[ri_m]]))
+						if l_id == self.load_label:
+							p_array_w_uload[i] = 4  # 0,1, 2- off, 3-ambiguous, 4-uload
+					else:
+						if ri_m > self.idle_mean - self.idle_var:
+							uload_present = True
+							p_array_w_uload[i] = 4
 
 		print ('Mapping time indices...')  ## This is not needed for average length
 		simplified_seq = np.zeros((len(self.power)))
