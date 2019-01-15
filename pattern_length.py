@@ -895,6 +895,13 @@ class PatternLength:
 		req_ts =  datetime.timestamp(datetime.strptime(time_stamp, '%Y-%m-%d %H:%M:%S'))
 		segmented_signal, end_points = self.__segment_signal(self.p_array)
 		for i, boundary in enumerate(end_points):
+			if i == 0 and req_ts-self.offset >= 0 and req_ts-self.offset <= boundary:
+				if segmented_signal[i] == self.idle_label:
+					return datetime.fromtimestamp(self.offset), datetime.fromtimestamp(self.offset+boundary)
+				elif segmented_signal[i+1] == self.idle_label:
+					return datetime.fromtimestamp(self.offset+end_points[i]), datetime.fromtimestamp(self.offset+end_points[i+1])
+				else:
+					return None, None
 			if i != 0 and req_ts-self.offset >= end_points[i-1] and req_ts-self.offset <= boundary:
 				if segmented_signal[i] == self.idle_label:
 					return datetime.fromtimestamp(self.offset+end_points[i-1]), datetime.fromtimestamp(self.offset+boundary)
