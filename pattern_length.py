@@ -27,9 +27,10 @@ class SinglePatternError(Exception):
 
 
 class PatternLength:
-	def __init__(self, raw_dataframe, total_time, min_len, max_len, order, n_states=10):
+	def __init__(self, raw_dataframe, total_time, start_time, min_len, max_len, order, n_states=10):
 		##### Parameters to be set 
 		self.total_time = total_time
+		self.start_time = datetime.strptime(start_time,'%H:%M:%S').time()
 		self.min_len = min_len
 		self.max_len = max_len
 		if self.max_len <= self.min_len:
@@ -58,29 +59,33 @@ class PatternLength:
 		df['TS'] = df['TS'].apply(lambda x: int(datetime.timestamp(datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))))
 		# print (df.shape[0], 'orig_signal length')
 		self.power = np.zeros((self.total_time))
-		self.power[0] = df.iloc[0,0]
 		self.offset = int(df.iloc[0,1])
 		t = self.offset
+		# start_time = datetime.fromtimestamp(self.offset)
+		# actual_start = datetime.combine(start_time.date(),self.start_time)
+		# start_ind = int(datetime.timestamp(start_time) - datetime.timestamp(actual_start))
+		start_ind = 0
+		self.power[start_ind] = df.iloc[0,0]
 		for i in range(1,df.shape[0]):
 			if int(df.iloc[i,1]) != t:
 				if round(df.iloc[i,1]-t) == 1.0:
-					self.power[t+1-self.offset] = df.iloc[i,0]
+					self.power[start_ind+t+1-self.offset] = df.iloc[i,0]
 					t+=1			
 				elif int(df.iloc[i,1])-t < 21.0:
 					orig_t = t
 					req_offset = orig_t+1-self.offset
 					avg = (df.iloc[i,0]+df.iloc[i-1,0])/2
 					for j in range(int(df.iloc[i,1]-orig_t)):
-						self.power[req_offset+j] = avg
+						self.power[start_ind+req_offset+j] = avg
 						t+=1
 				else:
 					orig_t = t
 					req_offset = orig_t+1-self.offset
 					for j in range(int(df.iloc[i,1]-orig_t)):
-						self.power[req_offset+j] = 0
+						self.power[start_ind+req_offset+j] = 0
 						t+=1
 			else: 
-				self.power[t-self.offset] = (self.power[t-self.offset]+df.iloc[i,0])/2
+				self.power[start_ind+t-self.offset] = (self.power[start_ind+t-self.offset]+df.iloc[i,0])/2
 		
 		### Filtering
 		if self.order == 1:
